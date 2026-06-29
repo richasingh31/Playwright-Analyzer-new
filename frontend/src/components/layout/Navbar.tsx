@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, Upload, TrendingUp } from 'lucide-react';
+import { Activity, Upload, TrendingUp, Bug } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const NAV = [
   { path: '/', label: 'Upload', Icon: Upload },
   { path: '/trends', label: 'Trends', Icon: TrendingUp },
+  { path: '/failures', label: 'Failures', Icon: Bug },
 ];
 
 export function Navbar() {

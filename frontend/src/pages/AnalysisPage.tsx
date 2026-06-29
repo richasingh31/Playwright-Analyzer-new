@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
 import type { ParsedReport, TestSuite, TestResult } from '../types';
-import { STATUS_CONFIG, ERROR_CATEGORY_CONFIG, formatDuration, formatDate, flattenTests } from '../utils/helpers';
+import { ERROR_CATEGORY_CONFIG, formatDuration, formatDate, flattenTests } from '../utils/helpers';
+import { exportAnalysisPDF } from '../utils/pdfExport';
 import { StatusDonutChart } from '../components/charts/StatusDonutChart';
 import { SuiteBarChart } from '../components/charts/SuiteBarChart';
 import { ErrorCategoryChart } from '../components/charts/ErrorCategoryChart';
@@ -22,6 +23,9 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
+import { ExportPDFButton } from '../components/ui/ExportPDFButton';
+import { ExecutiveSummary } from '../components/analysis/ExecutiveSummary';
+import { SmartRecommendations } from '../components/analysis/SmartRecommendations';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 
@@ -62,9 +66,7 @@ function StatCard({
 
 function SuiteRow({ suite, reportId }: { suite: TestSuite; reportId: string }) {
   const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
   const all = flattenTests([suite]);
-  const hasFailures = all.some((t) => t.status === 'failed' || t.status === 'flaky');
 
   return (
     <div className="border border-slate-700/60 rounded-xl overflow-hidden">
@@ -203,20 +205,26 @@ export function AnalysisPage() {
           </div>
         </div>
 
-        {/* Pass rate pill */}
-        <div
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 border ${
-            stats.passRate >= 90
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-              : stats.passRate >= 70
-              ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-              : 'border-red-500/30 bg-red-500/10 text-red-400'
-          }`}
-        >
-          <span className="text-2xl font-bold">{stats.passRate}%</span>
-          <span className="text-xs opacity-70">Pass Rate</span>
+        {/* Pass rate pill + export button */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 border ${
+              stats.passRate >= 90
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : stats.passRate >= 70
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                : 'border-red-500/30 bg-red-500/10 text-red-400'
+            }`}
+          >
+            <span className="text-2xl font-bold">{stats.passRate}%</span>
+            <span className="text-xs opacity-70">Pass Rate</span>
+          </div>
+          <ExportPDFButton onClick={() => exportAnalysisPDF(report)} />
         </div>
       </div>
+
+      {/* Executive summary */}
+      <ExecutiveSummary report={report} />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -307,6 +315,9 @@ export function AnalysisPage() {
           </div>
         </Card>
       )}
+
+      {/* Smart recommendations */}
+      <SmartRecommendations report={report} />
 
       {/* Suite list */}
       <Card>
