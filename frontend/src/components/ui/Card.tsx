@@ -6,6 +6,7 @@ interface CardProps {
   onClick?: () => void;
   hoverable?: boolean;
   glow?: 'emerald' | 'red' | 'amber' | 'indigo';
+  style?: React.CSSProperties;
 }
 
 const glowMap = {
@@ -15,13 +16,14 @@ const glowMap = {
   indigo: 'hover:shadow-indigo-500/10 hover:border-indigo-500/40',
 };
 
-export function Card({ children, className, onClick, hoverable, glow }: CardProps) {
+export function Card({ children, className, onClick, hoverable, glow, style }: CardProps) {
   return (
     <div
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+      style={style}
       className={clsx(
         'bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 backdrop-blur-sm',
         'transition-all duration-200',

@@ -1,11 +1,13 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, Upload, TrendingUp, Bug } from 'lucide-react';
+import { Activity, Upload, TrendingUp, Bug, Grid3X3, GitCompare } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const NAV = [
   { path: '/', label: 'Upload', Icon: Upload },
   { path: '/trends', label: 'Trends', Icon: TrendingUp },
   { path: '/failures', label: 'Failures', Icon: Bug },
+  { path: '/api-scenarios', label: 'API & Scenarios', Icon: Grid3X3 },
+  { path: '/tenant-comparison', label: 'Tenant Comparison', Icon: GitCompare },
 ];
 
 export function Navbar() {

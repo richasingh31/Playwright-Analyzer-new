@@ -10,6 +10,11 @@ import {
   TrendingDown,
   Minus,
   BarChart2,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -34,6 +39,19 @@ import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CellStatus = 'passed' | 'failed' | 'flaky' | 'skipped' | 'missing';
+
+interface RegressionItem {
+  testKey: string;
+  testLabel: string;
+  file: string;
+  errorMessage: string;
+  errorCategory: string;
+  errorStack?: string;
+  latestRunName: string;
+  prevRunName: string;
+  latestDate: string;
+  prevDate: string;
+}
 
 interface HeatmapRow {
   testKey: string;
@@ -247,6 +265,65 @@ function buildPatterns(reports: ParsedReport[]) {
       ? totalErrors(errorEvolution[errorEvolution.length - 1]) - totalErrors(errorEvolution[0])
       : 0;
 
+  // ── Regression detection (passed in previous run → failed in latest run) ────
+  const dateMap = new Map<string, ParsedReport[]>();
+  sorted.forEach((r) => {
+    const ts = r.metadata?.startTime
+      ? new Date(r.metadata.startTime)
+      : new Date(r.uploadedAt);
+    const key = ts.toISOString().slice(0, 10);
+    if (!dateMap.has(key)) dateMap.set(key, []);
+    dateMap.get(key)!.push(r);
+  });
+
+  const sortedDates = Array.from(dateMap.keys()).sort();
+  let regressions: RegressionItem[] = [];
+  let regressionLatestDate = '';
+  let regressionPrevDate = '';
+
+  if (sortedDates.length >= 2) {
+    regressionLatestDate = sortedDates[sortedDates.length - 1];
+    regressionPrevDate = sortedDates[sortedDates.length - 2];
+    const latestReports = dateMap.get(regressionLatestDate)!;
+    const prevReports = dateMap.get(regressionPrevDate)!;
+
+    // Build prev status map — if a test passed in any prev-date run, it counts as "was passing"
+    const prevStatusMap = new Map<string, { status: 'passed' | 'failed'; runName: string }>();
+    prevReports.forEach((r) => {
+      flattenTests(r.suites).forEach((test) => {
+        const ex = prevStatusMap.get(test.fullTitle);
+        if (!ex || test.status === 'passed') {
+          prevStatusMap.set(test.fullTitle, {
+            status: test.status === 'passed' ? 'passed' : 'failed',
+            runName: r.name,
+          });
+        }
+      });
+    });
+
+    const seen = new Set<string>();
+    latestReports.forEach((r) => {
+      flattenTests(r.suites).forEach((test) => {
+        if (seen.has(test.fullTitle) || test.status !== 'failed') return;
+        const prev = prevStatusMap.get(test.fullTitle);
+        if (!prev || prev.status !== 'passed') return;
+        seen.add(test.fullTitle);
+        regressions.push({
+          testKey: test.fullTitle,
+          testLabel: trunc(test.title, 60),
+          file: test.file,
+          errorMessage: test.error?.message ?? 'Unknown error',
+          errorCategory: test.error?.category ?? 'unknown',
+          errorStack: test.error?.stack,
+          latestRunName: r.name,
+          prevRunName: prev.runName,
+          latestDate: regressionLatestDate,
+          prevDate: regressionPrevDate,
+        });
+      });
+    });
+  }
+
   return {
     heatReports,
     heatmapRows,
@@ -259,6 +336,9 @@ function buildPatterns(reports: ParsedReport[]) {
     worstSuiteRate: suiteHealth[0]?.failRate,
     errorTrend,
     hasErrors: errorEvolution.some((e) => totalErrors(e) > 0),
+    regressions,
+    regressionLatestDate,
+    regressionPrevDate,
   };
 }
 
@@ -558,6 +638,157 @@ function ErrorEvoTooltip({ active, payload, label }: {
   );
 }
 
+// ── Regression Section ────────────────────────────────────────────────────────
+
+const CATEGORY_STYLES: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  assertion:          { label: 'Assertion',    color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)' },
+  timeout:            { label: 'Timeout',      color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.3)' },
+  network:            { label: 'Network',      color: '#3b82f6', bg: 'rgba(59,130,246,0.1)',  border: 'rgba(59,130,246,0.3)' },
+  'element-not-found':{ label: 'Element',      color: '#a855f7', bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.3)' },
+  runtime:            { label: 'Runtime',      color: '#ec4899', bg: 'rgba(236,72,153,0.1)',  border: 'rgba(236,72,153,0.3)' },
+  unknown:            { label: 'Unknown',      color: '#64748b', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.3)' },
+};
+
+function RegressionCard({ item }: { item: RegressionItem }) {
+  const [expanded, setExpanded] = useState(false);
+  const cat = CATEGORY_STYLES[item.errorCategory] ?? CATEGORY_STYLES.unknown;
+  const shortFile = item.file.split(/[\\/]/).slice(-2).join('/');
+
+  return (
+    <div
+      className="rounded-xl border transition-colors"
+      style={{ borderColor: 'rgba(239,68,68,0.2)', backgroundColor: 'rgba(239,68,68,0.04)' }}
+    >
+      {/* Header row */}
+      <div className="flex items-start gap-3 px-4 py-3">
+        <div className="mt-0.5 shrink-0">
+          <XCircle className="h-4 w-4 text-red-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white truncate" title={item.testKey}>
+            {item.testLabel}
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5 truncate" title={item.file}>
+            {shortFile}
+          </p>
+        </div>
+
+        {/* Category badge */}
+        <span
+          className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border"
+          style={{ color: cat.color, backgroundColor: cat.bg, borderColor: cat.border }}
+        >
+          {cat.label}
+        </span>
+
+        {/* Expand toggle */}
+        {item.errorStack && (
+          <button
+            onClick={() => setExpanded((p) => !p)}
+            className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors"
+            title={expanded ? 'Hide stack trace' : 'Show stack trace'}
+          >
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        )}
+      </div>
+
+      {/* Error message */}
+      <div className="px-4 pb-3 -mt-1">
+        <p
+          className="text-xs text-red-300/80 leading-relaxed"
+          style={{ fontFamily: 'ui-monospace, monospace' }}
+        >
+          {item.errorMessage.split('\n')[0]}
+        </p>
+      </div>
+
+      {/* Run comparison pill */}
+      <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
+        <span className="flex items-center gap-1 text-xs text-emerald-400">
+          <CheckCircle2 className="h-3 w-3" />
+          Passed: {item.prevDate}
+        </span>
+        <span className="text-slate-600 text-xs">→</span>
+        <span className="flex items-center gap-1 text-xs text-red-400">
+          <XCircle className="h-3 w-3" />
+          Failed: {item.latestDate}
+        </span>
+        <span className="ml-auto text-xs text-slate-600 truncate" title={item.latestRunName}>
+          in {trunc(item.latestRunName, 30)}
+        </span>
+      </div>
+
+      {/* Stack trace (collapsible) */}
+      {expanded && item.errorStack && (
+        <div className="px-4 pb-4 border-t border-red-500/10 pt-3">
+          <pre
+            className="text-xs text-slate-400 whitespace-pre-wrap break-all leading-relaxed max-h-48 overflow-y-auto rounded-lg p-3"
+            style={{ backgroundColor: 'rgba(0,0,0,0.25)', fontFamily: 'ui-monospace, monospace' }}
+          >
+            {item.errorStack}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RegressionSection({
+  regressions,
+  prevDate,
+  latestDate,
+}: {
+  regressions: RegressionItem[];
+  prevDate: string;
+  latestDate: string;
+}) {
+  const hasRegressions = regressions.length > 0;
+
+  return (
+    <Card>
+      <CardHeader
+        title="New Regressions"
+        subtitle={
+          prevDate && latestDate
+            ? `Tests that passed on ${prevDate} but failed on ${latestDate}`
+            : 'Tests that passed in the previous run but failed in the latest run'
+        }
+      />
+
+      {!prevDate ? (
+        <p className="text-center text-sm text-slate-500 py-6">
+          Upload at least 2 reports from different dates to detect regressions.
+        </p>
+      ) : !hasRegressions ? (
+        <div className="flex flex-col items-center gap-3 py-8">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10">
+            <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-emerald-400">No regressions detected</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              All tests that passed on {prevDate} still pass on {latestDate}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+            <span className="text-sm text-amber-300 font-medium">
+              {regressions.length} test{regressions.length !== 1 ? 's' : ''} regressed since {prevDate}
+            </span>
+          </div>
+          {regressions.map((item) => (
+            <RegressionCard key={item.testKey} item={item} />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Metric card ───────────────────────────────────────────────────────────────
 
 function MetricCard({
@@ -654,6 +885,9 @@ export function FailurePatternsPage() {
     worstSuiteRate,
     errorTrend,
     hasErrors,
+    regressions,
+    regressionLatestDate,
+    regressionPrevDate,
   } = data;
 
   const suiteChartH = Math.min(360, Math.max(160, suiteHealth.length * 38 + 40));
@@ -674,7 +908,14 @@ export function FailurePatternsPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <MetricCard
+          label="New Regressions"
+          value={regressions.length}
+          sub={regressionPrevDate ? `since ${regressionPrevDate}` : 'need 2+ date groups'}
+          accent={regressions.length > 0 ? 'text-amber-400' : 'text-emerald-400'}
+          icon={<AlertTriangle className="h-5 w-5" />}
+        />
         <MetricCard
           label="Always Failing"
           value={consistentlyFailing}
@@ -716,6 +957,13 @@ export function FailurePatternsPage() {
           }
         />
       </div>
+
+      {/* Regression Detector */}
+      <RegressionSection
+        regressions={regressions}
+        prevDate={regressionPrevDate}
+        latestDate={regressionLatestDate}
+      />
 
       {/* Failure Heatmap */}
       <Card>
