@@ -1,9 +1,6 @@
 import type { ParsedReport, ReportSummary } from '../types/report.types';
+import { SqlServerReportRepository } from './sql-server.store';
 
-/**
- * Repository interface — implement this against your database when ready.
- * Swap the singleton export below; all other code stays the same.
- */
 export interface IReportRepository {
   save(report: ParsedReport): Promise<ParsedReport>;
   findById(id: string): Promise<ParsedReport | null>;
@@ -26,7 +23,11 @@ class InMemoryReportRepository implements IReportRepository {
   async findAll(): Promise<ReportSummary[]> {
     return Array.from(this.reports.values())
       .map(({ id, name, uploadedAt, stats, metadata }) => ({
-        id, name, uploadedAt, stats, startTime: metadata?.startTime,
+        id,
+        name,
+        uploadedAt,
+        stats,
+        startTime: metadata?.startTime,
       }))
       .sort(
         (a, b) =>
@@ -39,4 +40,7 @@ class InMemoryReportRepository implements IReportRepository {
   }
 }
 
-export const reportRepository: IReportRepository = new InMemoryReportRepository();
+export const reportRepository: IReportRepository =
+  process.env.USE_DATABASE === 'true'
+    ? new SqlServerReportRepository()
+    : new InMemoryReportRepository();

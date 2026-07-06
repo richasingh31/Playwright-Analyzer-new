@@ -1,9 +1,11 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import reportRoutes from './routes/reports.routes';
+import { runMigrations } from './storage/migrations';
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -31,7 +33,6 @@ app.get('/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() }),
 );
 
-// Global error handler
 app.use(
   (
     err: Error & { status?: number },
@@ -46,6 +47,21 @@ app.use(
   },
 );
 
-app.listen(PORT, () => {
-  console.log(`\n🚀  Playwright Analyzer API  →  http://localhost:${PORT}\n`);
+async function start() {
+  if (process.env.USE_DATABASE === 'true') {
+    console.log('Connecting to SQL Server and running migrations...');
+    await runMigrations();
+  }
+
+  app.listen(PORT, () => {
+    console.log(`\n🚀  Playwright Analyzer API  →  http://localhost:${PORT}\n`);
+    console.log(
+      `   Storage: ${process.env.USE_DATABASE === 'true' ? 'SQL Server' : 'In-memory'}\n`,
+    );
+  });
+}
+
+start().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
