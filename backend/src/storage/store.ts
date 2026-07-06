@@ -1,6 +1,9 @@
 import type { ParsedReport, ReportSummary } from '../types/report.types';
-import { SqlServerReportRepository } from './sql-server.store';
 
+/**
+ * Repository interface — implement this against your database when ready.
+ * Swap the singleton export below; all other code stays the same.
+ */
 export interface IReportRepository {
   save(report: ParsedReport): Promise<ParsedReport>;
   findById(id: string): Promise<ParsedReport | null>;
@@ -40,7 +43,4 @@ class InMemoryReportRepository implements IReportRepository {
   }
 }
 
-export const reportRepository: IReportRepository =
-  process.env.USE_DATABASE === 'true'
-    ? new SqlServerReportRepository()
-    : new InMemoryReportRepository();
+export const reportRepository: IReportRepository = new InMemoryReportRepository();
