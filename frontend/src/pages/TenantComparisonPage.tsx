@@ -373,9 +373,9 @@ export function TenantComparisonPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="p-5">
-          <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Tenants</div>
-          <div className="text-3xl font-bold text-white">{tenants.length}</div>
-          <div className="text-xs text-slate-500 mt-1">{tenants.join(', ')}</div>
+          <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Reports</div>
+          <div className="text-3xl font-bold text-white">{reports.length}</div>
+          <div className="text-xs text-slate-500 mt-1">total uploaded</div>
         </Card>
         <Card
           className="p-5 cursor-pointer hover:border-amber-500/40 transition-colors"

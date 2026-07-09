@@ -595,8 +595,8 @@ function SuiteTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl text-xs">
-      <p className="font-semibold text-white mb-2" title={d.suiteName}>{trunc(d.suiteName, 30)}</p>
+    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl text-xs max-w-xs">
+      <p className="font-semibold text-white mb-2 break-all">{d.suiteName}</p>
       <div className="space-y-1">
         <div className="flex justify-between gap-4">
           <span className="text-slate-400">Fail Rate</span>
@@ -876,7 +876,6 @@ export function FailurePatternsPage() {
   const {
     heatReports,
     heatmapRows,
-    flakyStats,
     suiteHealth,
     errorEvolution,
     consistentlyFailing,
@@ -1080,95 +1079,8 @@ export function FailurePatternsPage() {
         </Card>
       </div>
 
-      {/* Flakiness Report */}
-      {flakyStats.length > 0 && (
-        <Card>
-          <CardHeader
-            title="Flakiness Report"
-            subtitle="Tests oscillating between pass and fail — high score = unreliable test"
-          />
-          <div className="overflow-x-auto -mx-2">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-500 border-b border-slate-700/60">
-                  <th className="pb-3 px-2 font-medium w-7">#</th>
-                  <th className="pb-3 px-2 font-medium">Test</th>
-                  <th className="pb-3 px-2 font-medium text-center">Flakiness Score</th>
-                  <th className="pb-3 px-2 font-medium text-center">Status Flips</th>
-                  <th className="pb-3 px-2 font-medium text-center">Passed</th>
-                  <th className="pb-3 px-2 font-medium text-center">Failed</th>
-                  <th className="pb-3 px-2 font-medium text-center">Total Runs</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/40">
-                {flakyStats.map((t, i) => {
-                  const scoreColor =
-                    t.flakinessScore >= 70
-                      ? '#ef4444'
-                      : t.flakinessScore >= 40
-                      ? '#f97316'
-                      : '#f59e0b';
-                  const badge =
-                    t.flakinessScore >= 70
-                      ? { label: 'Very Flaky', cls: 'text-red-400 bg-red-500/10 border-red-500/30' }
-                      : t.flakinessScore >= 40
-                      ? { label: 'Flaky', cls: 'text-orange-400 bg-orange-500/10 border-orange-500/30' }
-                      : { label: 'Slightly', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
-                  return (
-                    <tr key={t.testKey} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3 px-2 text-slate-500 font-mono text-xs">{i + 1}</td>
-                      <td className="py-3 px-2 max-w-[280px]">
-                        <p className="font-medium text-white truncate" title={t.testKey}>
-                          {t.testLabel}
-                        </p>
-                      </td>
-                      <td className="py-3 px-2 text-center">
-                        <div className="inline-flex items-center gap-2">
-                          <div className="h-1.5 w-14 rounded-full bg-slate-700 overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{ width: `${t.flakinessScore}%`, background: scoreColor }}
-                            />
-                          </div>
-                          <span
-                            className="text-xs font-semibold tabular-nums"
-                            style={{ color: scoreColor }}
-                          >
-                            {t.flakinessScore}%
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-2 text-center">
-                        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${badge.cls}`}>
-                          {badge.label} · {t.flips}×
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 text-center text-emerald-400 tabular-nums font-medium">
-                        {t.passed}
-                      </td>
-                      <td className="py-3 px-2 text-center text-red-400 tabular-nums font-medium">
-                        {t.failed}
-                      </td>
-                      <td className="py-3 px-2 text-center text-slate-400 tabular-nums">
-                        {t.totalRuns}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Flakiness legend note */}
-          <p className="mt-4 text-xs text-slate-600 border-t border-slate-700/40 pt-3">
-            Flakiness Score = status changes ÷ (total runs − 1). A score of 100% means the
-            test alternated pass/fail on every consecutive run.
-          </p>
-        </Card>
-      )}
-
       {/* Empty state when everything passes */}
-      {heatmapRows.length === 0 && suiteHealth.length === 0 && flakyStats.length === 0 && (
+      {heatmapRows.length === 0 && suiteHealth.length === 0 && flakyCount === 0 && (
         <Card className="text-center py-12">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 mx-auto mb-4">
             <BarChart2 className="h-8 w-8 text-emerald-400" />

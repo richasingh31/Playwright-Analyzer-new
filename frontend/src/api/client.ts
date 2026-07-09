@@ -6,8 +6,9 @@ const http = axios.create({ baseURL: '/api', timeout: 30_000 });
 http.interceptors.response.use(
   (r) => r,
   (err) => {
-    const msg: string =
-      err.response?.data?.error ?? err.message ?? 'Unexpected error';
+    const msg: string = !err.response
+      ? 'Cannot reach the server. Make sure the backend is running (cd backend && npm run dev).'
+      : (err.response.data?.error ?? err.message ?? 'Unexpected error');
     return Promise.reject(new Error(msg));
   },
 );
