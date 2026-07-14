@@ -25,10 +25,10 @@ export function Card({ children, className, onClick, hoverable, glow, style }: C
       onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
       style={style}
       className={clsx(
-        'bg-slate-800/60 border border-slate-700/60 rounded-2xl p-6 backdrop-blur-sm',
+        'bg-white border border-slate-200 rounded-2xl p-6 shadow-sm',
         'transition-all duration-200',
         hoverable && [
-          'hover:bg-slate-800 hover:border-slate-600 hover:shadow-lg',
+          'hover:bg-slate-50 hover:border-slate-300 hover:shadow-lg',
           glow && glowMap[glow],
         ],
         onClick && 'cursor-pointer select-none',
@@ -52,8 +52,8 @@ export function CardHeader({
   return (
     <div className="flex items-start justify-between mb-5">
       <div>
-        <h3 className="text-base font-semibold text-white">{title}</h3>
-        {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
       </div>
       {action && <div>{action}</div>}
     </div>

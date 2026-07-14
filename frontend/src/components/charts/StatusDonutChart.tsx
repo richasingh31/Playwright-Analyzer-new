@@ -35,10 +35,10 @@ function CenterLabel({
   const cy = viewBox?.cy ?? 0;
   return (
     <g>
-      <text x={cx} y={cy - 12} textAnchor="middle" fill="#ffffff" fontSize={30} fontWeight={700}>
+      <text x={cx} y={cy - 12} textAnchor="middle" fill="#0f172a" fontSize={30} fontWeight={700}>
         {passRate}%
       </text>
-      <text x={cx} y={cy + 10} textAnchor="middle" fill="#94a3b8" fontSize={12}>
+      <text x={cx} y={cy + 10} textAnchor="middle" fill="#475569" fontSize={12}>
         Pass Rate
       </text>
       <text x={cx} y={cy + 28} textAnchor="middle" fill="#64748b" fontSize={11}>
@@ -62,11 +62,11 @@ function CustomTooltip({
   const cfg = STATUS_CONFIG[p.status];
   const pct = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl backdrop-blur-sm text-sm">
+    <div className="rounded-xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm text-sm">
       <p className={`font-semibold ${cfg.color} mb-1`}>{name}</p>
-      <p className="text-white text-lg font-bold">{value} tests</p>
-      <p className="text-slate-400">{pct}% of total</p>
-      <p className="mt-2 text-xs text-indigo-400">Click to drill down →</p>
+      <p className="text-slate-900 text-lg font-bold">{value} tests</p>
+      <p className="text-slate-500">{pct}% of total</p>
+      <p className="mt-2 text-xs text-indigo-600">Click to drill down →</p>
     </div>
   );
 }
@@ -118,7 +118,7 @@ export function StatusDonutChart({ stats, reportId }: Props) {
           content={<CustomTooltip total={stats.total} />}
         />
         <Legend
-          formatter={(v) => <span className="text-slate-300 text-sm">{v}</span>}
+          formatter={(v) => <span className="text-slate-700 text-sm">{v}</span>}
           iconType="circle"
           iconSize={8}
         />

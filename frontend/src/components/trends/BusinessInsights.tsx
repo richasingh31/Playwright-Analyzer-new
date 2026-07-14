@@ -33,7 +33,7 @@ const CAT_META: Record<ErrorCategory, { label: string; color: string }> = {
   network:             { label: 'Network',       color: '#3b82f6' },
   'element-not-found': { label: 'Element',       color: '#a855f7' },
   runtime:             { label: 'Runtime',       color: '#ef4444' },
-  unknown:             { label: 'Unknown',       color: '#64748b' },
+  application:         { label: 'Application',   color: '#64748b' },
 };
 
 function barFill(failRate: number) {
@@ -146,7 +146,7 @@ function InsightCard({
   label,
   value,
   sub,
-  accent = 'text-white',
+  accent = 'text-slate-900',
   icon,
 }: {
   label: string;
@@ -180,24 +180,24 @@ function FailingTooltip({
   const d = payload[0].payload;
   const catMeta = d.category ? CAT_META[d.category] : null;
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl text-xs max-w-[260px]">
-      <p className="text-white font-semibold mb-1 break-words leading-snug">{d.fullLabel}</p>
+    <div className="rounded-xl border border-slate-400 bg-slate-200/95 p-3 shadow-2xl text-xs max-w-[260px]">
+      <p className="text-slate-900 font-semibold mb-1 break-words leading-snug">{d.fullLabel}</p>
       <div className="space-y-1.5 mt-2">
         <div className="flex justify-between gap-4">
-          <span className="text-slate-400">Failed</span>
-          <span className="text-red-400 font-bold">{d.failures} run{d.failures !== 1 ? 's' : ''}</span>
+          <span className="text-slate-600">Failed</span>
+          <span className="text-red-600 font-bold">{d.failures} run{d.failures !== 1 ? 's' : ''}</span>
         </div>
         <div className="flex justify-between gap-4">
-          <span className="text-slate-400">Fail Rate</span>
+          <span className="text-slate-600">Fail Rate</span>
           <span className="font-bold" style={{ color: barFill(d.failRate) }}>{d.failRate}%</span>
         </div>
         <div className="flex justify-between gap-4">
-          <span className="text-slate-400">Pass-rate impact</span>
-          <span className="text-white font-bold">-{d.impact}%</span>
+          <span className="text-slate-600">Pass-rate impact</span>
+          <span className="text-slate-900 font-bold">-{d.impact}%</span>
         </div>
         {catMeta && (
           <div className="flex justify-between gap-4">
-            <span className="text-slate-400">Root cause</span>
+            <span className="text-slate-600">Root cause</span>
             <span style={{ color: catMeta.color }}>{catMeta.label}</span>
           </div>
         )}
@@ -218,8 +218,8 @@ function CategoryTooltip({
   if (!active || !payload?.length) return null;
   const d = payload[0];
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl text-xs">
-      <p className="font-semibold text-white mb-1">{d.name}</p>
+    <div className="rounded-xl border border-slate-400 bg-slate-200/95 p-3 shadow-2xl text-xs">
+      <p className="font-semibold text-slate-900 mb-1">{d.name}</p>
       <p style={{ color: d.payload.color }} className="font-bold">
         {d.value} failures · {(d.percent * 100).toFixed(0)}%
       </p>
@@ -243,9 +243,9 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
   return (
     <div className="space-y-6">
       {/* Section header */}
-      <div className="border-b border-slate-700/60 pb-4">
-        <h2 className="text-lg font-bold text-white">Quality Intelligence</h2>
-        <p className="text-slate-400 text-sm mt-0.5">
+      <div className="border-b border-slate-300/60 pb-4">
+        <h2 className="text-lg font-bold text-slate-900">Quality Intelligence</h2>
+        <p className="text-slate-600 text-sm mt-0.5">
           Business-focused failure analysis across {reports.length} test run{reports.length !== 1 ? 's' : ''} — what is failing, why, and where to focus first
         </p>
       </div>
@@ -256,14 +256,14 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
           label="Tests at Risk"
           value={testsAtRisk}
           sub="failing in 2+ reports"
-          accent="text-red-400"
+          accent="text-red-600"
           icon={<ShieldAlert className="h-5 w-5" />}
         />
         <InsightCard
           label="Top Root Cause"
           value={topCategory?.label ?? '—'}
           sub={topCategory ? `${topCategory.count} total failure${topCategory.count !== 1 ? 's' : ''}` : undefined}
-          accent="text-amber-400"
+          accent="text-amber-600"
           icon={<AlertTriangle className="h-5 w-5" />}
         />
         <InsightCard
@@ -278,10 +278,10 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
           sub="first run vs latest run"
           accent={
             Math.abs(trendDelta) < 1
-              ? 'text-slate-400'
+              ? 'text-slate-600'
               : trendDelta > 0
-              ? 'text-emerald-400'
-              : 'text-red-400'
+              ? 'text-emerald-600'
+              : 'text-red-600'
           }
           icon={
             Math.abs(trendDelta) < 1 ? (
@@ -297,7 +297,7 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
           label="Biggest Offender"
           value={topTest ? `${topTest.failures}×` : '—'}
           sub={topTest?.label}
-          accent="text-orange-400"
+          accent="text-orange-600"
           icon={<Zap className="h-5 w-5" />}
         />
       </div>
@@ -318,10 +318,10 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
                   margin={{ top: 4, right: 56, left: 8, bottom: 24 }}
                   barCategoryGap="28%"
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                   <XAxis
                     type="number"
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                    tick={{ fill: '#475569', fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                     allowDecimals={false}
@@ -337,14 +337,14 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
                     type="category"
                     dataKey="label"
                     width={152}
-                    tick={{ fill: '#cbd5e1', fontSize: 11 }}
+                    tick={{ fill: '#334155', fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(v: string) => trunc(v, 24)}
                   />
                   <RechartsTooltip
                     content={<FailingTooltip />}
-                    cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                    cursor={{ fill: 'rgba(15,23,42,0.03)' }}
                   />
                   <Bar dataKey="failures" maxBarSize={22} radius={[0, 3, 3, 0]}>
                     {top10.map((entry, i) => (
@@ -353,7 +353,7 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
                     <LabelList
                       dataKey="failures"
                       position="right"
-                      style={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
+                      style={{ fill: '#475569', fontSize: 11, fontWeight: 600 }}
                       formatter={(v: number) => `${v}×`}
                     />
                   </Bar>
@@ -391,7 +391,7 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
                     iconType="circle"
                     iconSize={8}
                     formatter={(v) => (
-                      <span className="text-slate-300 text-xs">{v}</span>
+                      <span className="text-slate-700 text-xs">{v}</span>
                     )}
                   />
                 </PieChart>
@@ -411,7 +411,7 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
           <div className="overflow-x-auto -mx-2">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-slate-500 border-b border-slate-700/60">
+                <tr className="text-left text-xs text-slate-500 border-b border-slate-300/60">
                   <th className="pb-3 px-2 font-medium w-7">#</th>
                   <th className="pb-3 px-2 font-medium">Test</th>
                   <th className="pb-3 px-2 font-medium text-center">Fail Rate</th>
@@ -421,20 +421,20 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
                   <th className="pb-3 px-2 font-medium text-center">Priority</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/40">
+              <tbody className="divide-y divide-slate-300/40">
                 {testStats.slice(0, 10).map((t, i) => {
                   const severity =
                     t.failRate >= 70
-                      ? { label: 'Critical', cls: 'text-red-400 bg-red-500/10 border-red-500/30' }
+                      ? { label: 'Critical', cls: 'text-red-600 bg-red-500/10 border-red-500/30' }
                       : t.failRate >= 40
-                      ? { label: 'High',     cls: 'text-orange-400 bg-orange-500/10 border-orange-500/30' }
-                      : { label: 'Medium',   cls: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
+                      ? { label: 'High',     cls: 'text-orange-600 bg-orange-500/10 border-orange-500/30' }
+                      : { label: 'Medium',   cls: 'text-amber-600 bg-amber-500/10 border-amber-500/30' };
                   const catMeta = t.category ? CAT_META[t.category] : null;
                   return (
-                    <tr key={t.key} className="hover:bg-slate-800/40 transition-colors">
+                    <tr key={t.key} className="hover:bg-slate-200/40 transition-colors">
                       <td className="py-3 px-2 text-slate-500 font-mono text-xs">{i + 1}</td>
                       <td className="py-3 px-2 max-w-[260px]">
-                        <p className="font-medium text-white truncate" title={t.fullLabel}>
+                        <p className="font-medium text-slate-900 truncate" title={t.fullLabel}>
                           {t.label}
                         </p>
                         <p className="text-xs text-slate-500 truncate" title={t.fullLabel}>
@@ -443,7 +443,7 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
                       </td>
                       <td className="py-3 px-2 text-center">
                         <div className="inline-flex items-center gap-2">
-                          <div className="h-1.5 w-14 rounded-full bg-slate-700 overflow-hidden">
+                          <div className="h-1.5 w-14 rounded-full bg-slate-300 overflow-hidden">
                             <div
                               className="h-full rounded-full"
                               style={{
@@ -461,7 +461,7 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
                         </div>
                       </td>
                       <td className="py-3 px-2 text-center text-xs tabular-nums">
-                        <span className="text-red-400 font-bold">{t.failures}</span>
+                        <span className="text-red-600 font-bold">{t.failures}</span>
                         <span className="text-slate-500"> / {t.totalRuns}</span>
                       </td>
                       <td className="py-3 px-2 text-center">
@@ -477,11 +477,11 @@ export function BusinessInsights({ reports }: { reports: ParsedReport[] }) {
                             {catMeta.label}
                           </span>
                         ) : (
-                          <span className="text-slate-600 text-xs">—</span>
+                          <span className="text-slate-400 text-xs">—</span>
                         )}
                       </td>
                       <td className="py-3 px-2 text-center">
-                        <span className="text-white font-semibold text-xs tabular-nums">
+                        <span className="text-slate-900 font-semibold text-xs tabular-nums">
                           -{t.impact}%
                         </span>
                       </td>

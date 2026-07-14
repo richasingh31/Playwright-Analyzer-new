@@ -24,30 +24,30 @@ export const STATUS_CONFIG: Record<
 > = {
   passed: {
     label: 'Passed',
-    color: 'text-emerald-400',
-    bg: 'bg-emerald-500/15',
-    border: 'border-emerald-500/30',
+    color: 'text-emerald-600',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200',
     hex: '#10b981',
   },
   failed: {
     label: 'Failed',
-    color: 'text-red-400',
-    bg: 'bg-red-500/15',
-    border: 'border-red-500/30',
+    color: 'text-red-600',
+    bg: 'bg-red-50',
+    border: 'border-red-200',
     hex: '#ef4444',
   },
   skipped: {
     label: 'Skipped',
-    color: 'text-slate-400',
-    bg: 'bg-slate-500/15',
-    border: 'border-slate-500/30',
+    color: 'text-slate-600',
+    bg: 'bg-slate-100',
+    border: 'border-slate-200',
     hex: '#6b7280',
   },
   flaky: {
     label: 'Flaky',
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/15',
-    border: 'border-amber-500/30',
+    color: 'text-amber-600',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200',
     hex: '#f59e0b',
   },
 };
@@ -61,7 +61,7 @@ export const ERROR_CATEGORY_CONFIG: Record<
   network: { label: 'Network Errors', icon: '🌐', hex: '#3b82f6' },
   'element-not-found': { label: 'Element Not Found', icon: '🔍', hex: '#8b5cf6' },
   runtime: { label: 'Runtime Errors', icon: '💥', hex: '#ec4899' },
-  unknown: { label: 'Unknown Errors', icon: '❓', hex: '#6b7280' },
+  application: { label: 'Application Errors', icon: '⚙️', hex: '#6b7280' },
 };
 
 export function flattenTests(

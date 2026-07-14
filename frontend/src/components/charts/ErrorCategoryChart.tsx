@@ -27,13 +27,13 @@ function CustomTooltip({ active, payload }: TooltipProps) {
   const d = payload[0].payload;
   const cfg = ERROR_CATEGORY_CONFIG[d.category as keyof typeof ERROR_CATEGORY_CONFIG];
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl backdrop-blur-sm text-sm">
-      <p className="font-semibold text-white mb-1">
+    <div className="rounded-xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm text-sm">
+      <p className="font-semibold text-slate-900 mb-1">
         {cfg.icon} {d.label}
       </p>
-      <p className="text-red-400 font-bold text-lg">{d.count}</p>
-      <p className="text-slate-400 text-xs">failing tests</p>
-      <p className="mt-2 text-xs text-indigo-400">Click to view →</p>
+      <p className="text-red-600 font-bold text-lg">{d.count}</p>
+      <p className="text-slate-500 text-xs">failing tests</p>
+      <p className="mt-2 text-xs text-indigo-600">Click to view →</p>
     </div>
   );
 }
@@ -65,15 +65,15 @@ export function ErrorCategoryChart({ errorGroups, reportId }: Props) {
         }}
         style={{ cursor: 'pointer' }}
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
         <XAxis
           dataKey="name"
-          tick={{ fill: '#94a3b8', fontSize: 11 }}
-          axisLine={{ stroke: '#334155' }}
+          tick={{ fill: '#475569', fontSize: 11 }}
+          axisLine={{ stroke: '#cbd5e1' }}
           tickLine={false}
         />
         <YAxis
-          tick={{ fill: '#94a3b8', fontSize: 11 }}
+          tick={{ fill: '#475569', fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           allowDecimals={false}

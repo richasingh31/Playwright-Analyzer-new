@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import multer from 'multer';
+import { createHash } from 'crypto';
 import { parsePlaywrightReport } from '../services/parser.service';
 import { reportRepository } from '../storage/store';
 
@@ -34,9 +35,21 @@ router.post(
       res.status(400).json({ error: 'No file provided.' });
       return;
     }
+
+    const contentHash = createHash('sha256').update(req.file.buffer).digest('hex');
+    const existing = await reportRepository.findByContentHash(contentHash);
+    if (existing) {
+      res.status(409).json({
+        error: `This exact report was already uploaded as "${existing.name}".`,
+        existingId: existing.id,
+      });
+      return;
+    }
+
     const report = await parsePlaywrightReport(
       req.file.buffer,
       req.file.originalname,
+      contentHash,
     );
     await reportRepository.save(report);
     res.status(201).json({ id: report.id, name: report.name, stats: report.stats });

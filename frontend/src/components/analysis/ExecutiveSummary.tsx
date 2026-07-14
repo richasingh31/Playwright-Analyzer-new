@@ -17,9 +17,9 @@ export function ExecutiveSummary({ report }: { report: ParsedReport }) {
     XCircle;
 
   const iconColor =
-    stats.passRate >= 85 ? 'text-emerald-400' :
-    stats.passRate >= 70 ? 'text-amber-400' :
-    'text-red-400';
+    stats.passRate >= 85 ? 'text-emerald-600' :
+    stats.passRate >= 70 ? 'text-amber-600' :
+    'text-red-600';
 
   const assessment =
     stats.passRate >= 95  ? 'Quality is excellent. No critical action required.' :
@@ -28,7 +28,7 @@ export function ExecutiveSummary({ report }: { report: ParsedReport }) {
     'Critical: Pass rate is severely below threshold. Halt deployments and escalate.';
 
   return (
-    <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
+    <div className="rounded-xl border border-slate-300/50 bg-slate-200/30 p-5">
       <div className="flex items-start gap-4">
         {/* Grade badge */}
         <div className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-xl border-2 ${tailwind.bg}`}>
@@ -40,23 +40,23 @@ export function ExecutiveSummary({ report }: { report: ParsedReport }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <StatusIcon className={`h-4 w-4 shrink-0 ${iconColor}`} />
-            <h3 className="text-sm font-semibold text-white">Executive Summary</h3>
+            <h3 className="text-sm font-semibold text-slate-900">Executive Summary</h3>
           </div>
 
           <div className="space-y-1.5 text-sm">
-            <p className="text-slate-300">
-              <span className="text-white font-medium">{stats.total}</span> tests ran across{' '}
-              <span className="text-white font-medium">{suites.length} suite{suites.length !== 1 ? 's' : ''}</span>{' '}
-              in <span className="text-indigo-300 font-medium">{formatDuration(stats.duration)}</span>.
+            <p className="text-slate-700">
+              <span className="text-slate-900 font-medium">{stats.total}</span> tests ran across{' '}
+              <span className="text-slate-900 font-medium">{suites.length} suite{suites.length !== 1 ? 's' : ''}</span>{' '}
+              in <span className="text-indigo-700 font-medium">{formatDuration(stats.duration)}</span>.
             </p>
 
-            <p className="text-slate-400">
-              <span className="text-emerald-400 font-semibold">{stats.passed}</span> passed ({stats.passRate}%)
+            <p className="text-slate-600">
+              <span className="text-emerald-600 font-semibold">{stats.passed}</span> passed ({stats.passRate}%)
               {stats.failed > 0 && (
-                <> · <span className="text-red-400 font-semibold">{stats.failed}</span> failed ({failPct}%)</>
+                <> · <span className="text-red-600 font-semibold">{stats.failed}</span> failed ({failPct}%)</>
               )}
               {stats.flaky > 0 && (
-                <> · <span className="text-amber-400 font-semibold">{stats.flaky}</span> flaky ({flakyPct}%)</>
+                <> · <span className="text-amber-600 font-semibold">{stats.flaky}</span> flaky ({flakyPct}%)</>
               )}
               {stats.skipped > 0 && (
                 <> · <span className="text-slate-500">{stats.skipped}</span> skipped</>
@@ -64,9 +64,9 @@ export function ExecutiveSummary({ report }: { report: ParsedReport }) {
             </p>
 
             {topError && (
-              <p className="text-slate-400 text-xs">
+              <p className="text-slate-600 text-xs">
                 Primary failure type:{' '}
-                <span className="text-amber-300 font-medium">{topError.label}</span>{' '}
+                <span className="text-amber-700 font-medium">{topError.label}</span>{' '}
                 ({topError.count} occurrence{topError.count !== 1 ? 's' : ''})
               </p>
             )}

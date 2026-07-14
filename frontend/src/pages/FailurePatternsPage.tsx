@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Bug,
   Upload,
@@ -35,6 +34,7 @@ import { flattenTests, formatDate } from '../utils/helpers';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
+import { UploadReportModal } from '../components/upload/UploadReportModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -85,6 +85,7 @@ interface ErrorEvoEntry {
   Network: number;
   Element: number;
   Runtime: number;
+  Application: number;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -93,8 +94,8 @@ const CELL_STATUS_COLORS: Record<CellStatus, string> = {
   passed: '#10b981',
   failed: '#ef4444',
   flaky: '#f59e0b',
-  skipped: '#334155',
-  missing: '#1e293b',
+  skipped: '#cbd5e1',
+  missing: '#e2e8f0',
 };
 
 const CELL_STATUS_LABELS: Record<CellStatus, string> = {
@@ -111,6 +112,7 @@ const ERROR_COLORS = {
   Network: '#3b82f6',
   Element: '#a855f7',
   Runtime: '#ef4444',
+  Application: '#64748b',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -240,7 +242,7 @@ function buildPatterns(reports: ParsedReport[]) {
   const errorEvolution: ErrorEvoEntry[] = sorted.map((r) => {
     const entry: ErrorEvoEntry = {
       date: reportShortDate(r),
-      Assertion: 0, Timeout: 0, Network: 0, Element: 0, Runtime: 0,
+      Assertion: 0, Timeout: 0, Network: 0, Element: 0, Runtime: 0, Application: 0,
     };
     r.errorGroups.forEach((eg) => {
       if (eg.category === 'assertion') entry.Assertion = eg.count;
@@ -248,6 +250,7 @@ function buildPatterns(reports: ParsedReport[]) {
       else if (eg.category === 'network') entry.Network = eg.count;
       else if (eg.category === 'element-not-found') entry.Element = eg.count;
       else if (eg.category === 'runtime') entry.Runtime = eg.count;
+      else if (eg.category === 'application') entry.Application = eg.count;
     });
     return entry;
   });
@@ -259,7 +262,7 @@ function buildPatterns(reports: ParsedReport[]) {
   }).length;
 
   const totalErrors = (e: ErrorEvoEntry) =>
-    e.Assertion + e.Timeout + e.Network + e.Element + e.Runtime;
+    e.Assertion + e.Timeout + e.Network + e.Element + e.Runtime + e.Application;
   const errorTrend =
     sorted.length >= 2
       ? totalErrors(errorEvolution[errorEvolution.length - 1]) - totalErrors(errorEvolution[0])
@@ -313,7 +316,7 @@ function buildPatterns(reports: ParsedReport[]) {
           testLabel: trunc(test.title, 60),
           file: test.file,
           errorMessage: test.error?.message ?? 'Unknown error',
-          errorCategory: test.error?.category ?? 'unknown',
+          errorCategory: test.error?.category ?? 'application',
           errorStack: test.error?.stack,
           latestRunName: r.name,
           prevRunName: prev.runName,
@@ -444,11 +447,11 @@ function FailureHeatmap({
               </span>
               <div
                 className="rounded-sm"
-                style={{ width: 2, height: 8, backgroundColor: idx === reports.length - 1 ? '#64748b' : '#1e293b' }}
+                style={{ width: 2, height: 8, backgroundColor: idx === reports.length - 1 ? '#64748b' : '#cbd5e1' }}
               />
             </div>
           ))}
-          <div className="ml-3 text-xs text-slate-600 whitespace-nowrap self-end mb-1">failures</div>
+          <div className="ml-3 text-xs text-slate-400 whitespace-nowrap self-end mb-1">failures</div>
         </div>
 
         {/* Rows */}
@@ -463,12 +466,12 @@ function FailureHeatmap({
                 key={row.testKey}
                 className="flex items-center rounded-lg px-3 py-1.5 group transition-colors"
                 style={{
-                  backgroundColor: rowIdx % 2 === 0 ? 'rgba(15,23,42,0.5)' : 'rgba(30,41,59,0.3)',
+                  backgroundColor: rowIdx % 2 === 0 ? 'rgba(248,250,252,0.8)' : 'rgba(241,245,249,0.6)',
                 }}
               >
                 {/* Row index */}
                 <span
-                  className="text-slate-600 font-mono tabular-nums text-xs shrink-0 select-none"
+                  className="text-slate-400 font-mono tabular-nums text-xs shrink-0 select-none"
                   style={{ width: 24 }}
                 >
                   {rowIdx + 1}
@@ -480,14 +483,14 @@ function FailureHeatmap({
                   style={{ width: LABEL_W - 24 }}
                 >
                   <div
-                    className="text-sm font-medium truncate group-hover:text-white transition-colors"
-                    style={{ color: isCritical ? '#fca5a5' : isHigh ? '#fdba74' : '#cbd5e1' }}
+                    className="text-sm font-medium truncate group-hover:text-slate-900 transition-colors"
+                    style={{ color: isCritical ? '#dc2626' : isHigh ? '#ea580c' : '#334155' }}
                     title={row.testKey}
                   >
                     {row.testLabel}
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <div className="h-1 rounded-full overflow-hidden" style={{ width: 60, backgroundColor: '#1e293b' }}>
+                    <div className="h-1 rounded-full overflow-hidden" style={{ width: 60, backgroundColor: '#e2e8f0' }}>
                       <div
                         className="h-full rounded-full transition-all"
                         style={{
@@ -528,13 +531,13 @@ function FailureHeatmap({
                         : isHigh
                         ? 'rgba(249,115,22,0.15)'
                         : 'rgba(245,158,11,0.12)',
-                      color: isCritical ? '#f87171' : isHigh ? '#fb923c' : '#fbbf24',
+                      color: isCritical ? '#dc2626' : isHigh ? '#ea580c' : '#d97706',
                       border: `1px solid ${isCritical ? 'rgba(239,68,68,0.3)' : isHigh ? 'rgba(249,115,22,0.3)' : 'rgba(245,158,11,0.25)'}`,
                     }}
                   >
                     {row.totalFailures}
                   </div>
-                  <span className="text-slate-600 text-xs">fails</span>
+                  <span className="text-slate-400 text-xs">fails</span>
                 </div>
               </div>
             );
@@ -542,10 +545,10 @@ function FailureHeatmap({
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 mt-6 pt-4 border-t border-slate-700/40 flex-wrap">
-          <span className="text-xs text-slate-600 uppercase tracking-wider font-medium">Legend</span>
+        <div className="flex items-center gap-4 mt-6 pt-4 border-t border-slate-300/40 flex-wrap">
+          <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">Legend</span>
           {(['passed', 'failed', 'flaky', 'skipped', 'missing'] as CellStatus[]).map((s) => (
-            <span key={s} className="flex items-center gap-2 text-xs text-slate-400">
+            <span key={s} className="flex items-center gap-2 text-xs text-slate-600">
               {s === 'missing' ? (
                 <span
                   style={{
@@ -579,10 +582,10 @@ function FailureHeatmap({
                   />
                 </span>
               )}
-              <span className="text-slate-300">{CELL_STATUS_LABELS[s]}</span>
+              <span className="text-slate-700">{CELL_STATUS_LABELS[s]}</span>
             </span>
           ))}
-          <span className="ml-auto text-xs text-slate-600">Hover a cell for details · Showing top {rows.length} failing tests across last {reports.length} runs</span>
+          <span className="ml-auto text-xs text-slate-400">Hover a cell for details · Showing top {rows.length} failing tests across last {reports.length} runs</span>
         </div>
       </div>
     </div>
@@ -595,20 +598,20 @@ function SuiteTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl text-xs max-w-xs">
-      <p className="font-semibold text-white mb-2 break-all">{d.suiteName}</p>
+    <div className="rounded-xl border border-slate-400 bg-slate-200/95 p-3 shadow-2xl text-xs max-w-xs">
+      <p className="font-semibold text-slate-900 mb-2 break-all">{d.suiteName}</p>
       <div className="space-y-1">
         <div className="flex justify-between gap-4">
-          <span className="text-slate-400">Fail Rate</span>
+          <span className="text-slate-600">Fail Rate</span>
           <span className="font-bold" style={{ color: suiteFailColor(d.failRate) }}>{d.failRate}%</span>
         </div>
         <div className="flex justify-between gap-4">
-          <span className="text-red-400">Failed</span>
-          <span className="text-red-400 font-medium">{d.failed}</span>
+          <span className="text-red-600">Failed</span>
+          <span className="text-red-600 font-medium">{d.failed}</span>
         </div>
         <div className="flex justify-between gap-4">
-          <span className="text-slate-400">Total runs</span>
-          <span className="text-slate-300">{d.total}</span>
+          <span className="text-slate-600">Total runs</span>
+          <span className="text-slate-700">{d.total}</span>
         </div>
       </div>
     </div>
@@ -626,12 +629,12 @@ function ErrorEvoTooltip({ active, payload, label }: {
   const nonZero = payload.filter((p) => p.value > 0);
   if (!nonZero.length) return null;
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl text-xs min-w-[150px]">
-      <p className="text-slate-400 mb-2">{label}</p>
+    <div className="rounded-xl border border-slate-400 bg-slate-200/95 p-3 shadow-2xl text-xs min-w-[150px]">
+      <p className="text-slate-600 mb-2">{label}</p>
       {nonZero.map((p) => (
         <div key={p.name} className="flex justify-between gap-4">
           <span style={{ color: p.color }}>{p.name}</span>
-          <span className="text-white font-bold">{p.value}</span>
+          <span className="text-slate-900 font-bold">{p.value}</span>
         </div>
       ))}
     </div>
@@ -646,12 +649,12 @@ const CATEGORY_STYLES: Record<string, { label: string; color: string; bg: string
   network:            { label: 'Network',      color: '#3b82f6', bg: 'rgba(59,130,246,0.1)',  border: 'rgba(59,130,246,0.3)' },
   'element-not-found':{ label: 'Element',      color: '#a855f7', bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.3)' },
   runtime:            { label: 'Runtime',      color: '#ec4899', bg: 'rgba(236,72,153,0.1)',  border: 'rgba(236,72,153,0.3)' },
-  unknown:            { label: 'Unknown',      color: '#64748b', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.3)' },
+  application:        { label: 'Application',  color: '#64748b', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.3)' },
 };
 
 function RegressionCard({ item }: { item: RegressionItem }) {
   const [expanded, setExpanded] = useState(false);
-  const cat = CATEGORY_STYLES[item.errorCategory] ?? CATEGORY_STYLES.unknown;
+  const cat = CATEGORY_STYLES[item.errorCategory] ?? CATEGORY_STYLES.application;
   const shortFile = item.file.split(/[\\/]/).slice(-2).join('/');
 
   return (
@@ -662,10 +665,10 @@ function RegressionCard({ item }: { item: RegressionItem }) {
       {/* Header row */}
       <div className="flex items-start gap-3 px-4 py-3">
         <div className="mt-0.5 shrink-0">
-          <XCircle className="h-4 w-4 text-red-400" />
+          <XCircle className="h-4 w-4 text-red-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white truncate" title={item.testKey}>
+          <p className="text-sm font-semibold text-slate-900 truncate" title={item.testKey}>
             {item.testLabel}
           </p>
           <p className="text-xs text-slate-500 mt-0.5 truncate" title={item.file}>
@@ -685,7 +688,7 @@ function RegressionCard({ item }: { item: RegressionItem }) {
         {item.errorStack && (
           <button
             onClick={() => setExpanded((p) => !p)}
-            className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors"
+            className="shrink-0 text-slate-500 hover:text-slate-700 transition-colors"
             title={expanded ? 'Hide stack trace' : 'Show stack trace'}
           >
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -696,7 +699,7 @@ function RegressionCard({ item }: { item: RegressionItem }) {
       {/* Error message */}
       <div className="px-4 pb-3 -mt-1">
         <p
-          className="text-xs text-red-300/80 leading-relaxed"
+          className="text-xs text-red-700/80 leading-relaxed"
           style={{ fontFamily: 'ui-monospace, monospace' }}
         >
           {item.errorMessage.split('\n')[0]}
@@ -705,16 +708,16 @@ function RegressionCard({ item }: { item: RegressionItem }) {
 
       {/* Run comparison pill */}
       <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
-        <span className="flex items-center gap-1 text-xs text-emerald-400">
+        <span className="flex items-center gap-1 text-xs text-emerald-600">
           <CheckCircle2 className="h-3 w-3" />
           Passed: {item.prevDate}
         </span>
-        <span className="text-slate-600 text-xs">→</span>
-        <span className="flex items-center gap-1 text-xs text-red-400">
+        <span className="text-slate-400 text-xs">→</span>
+        <span className="flex items-center gap-1 text-xs text-red-600">
           <XCircle className="h-3 w-3" />
           Failed: {item.latestDate}
         </span>
-        <span className="ml-auto text-xs text-slate-600 truncate" title={item.latestRunName}>
+        <span className="ml-auto text-xs text-slate-400 truncate" title={item.latestRunName}>
           in {trunc(item.latestRunName, 30)}
         </span>
       </div>
@@ -723,7 +726,7 @@ function RegressionCard({ item }: { item: RegressionItem }) {
       {expanded && item.errorStack && (
         <div className="px-4 pb-4 border-t border-red-500/10 pt-3">
           <pre
-            className="text-xs text-slate-400 whitespace-pre-wrap break-all leading-relaxed max-h-48 overflow-y-auto rounded-lg p-3"
+            className="text-xs text-slate-600 whitespace-pre-wrap break-all leading-relaxed max-h-48 overflow-y-auto rounded-lg p-3"
             style={{ backgroundColor: 'rgba(0,0,0,0.25)', fontFamily: 'ui-monospace, monospace' }}
           >
             {item.errorStack}
@@ -763,10 +766,10 @@ function RegressionSection({
       ) : !hasRegressions ? (
         <div className="flex flex-col items-center gap-3 py-8">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10">
-            <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+            <CheckCircle2 className="h-6 w-6 text-emerald-600" />
           </div>
           <div className="text-center">
-            <p className="text-sm font-semibold text-emerald-400">No regressions detected</p>
+            <p className="text-sm font-semibold text-emerald-600">No regressions detected</p>
             <p className="text-xs text-slate-500 mt-0.5">
               All tests that passed on {prevDate} still pass on {latestDate}
             </p>
@@ -775,8 +778,8 @@ function RegressionSection({
       ) : (
         <div className="space-y-3">
           <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
-            <span className="text-sm text-amber-300 font-medium">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <span className="text-sm text-amber-700 font-medium">
               {regressions.length} test{regressions.length !== 1 ? 's' : ''} regressed since {prevDate}
             </span>
           </div>
@@ -795,7 +798,7 @@ function MetricCard({
   label,
   value,
   sub,
-  accent = 'text-white',
+  accent = 'text-slate-900',
   icon,
   valueClassName,
   valueTitle,
@@ -830,18 +833,22 @@ function MetricCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function FailurePatternsPage() {
-  const navigate = useNavigate();
   const [reports, setReports] = useState<ParsedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
-  useEffect(() => {
-    reportsApi
+  const loadReports = () => {
+    return reportsApi
       .getAll()
       .then((summaries) => Promise.all(summaries.map((s) => reportsApi.getById(s.id))))
       .then(setReports)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadReports();
   }, []);
 
   const data = useMemo(
@@ -855,18 +862,27 @@ export function FailurePatternsPage() {
   if (reports.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-6 py-24 animate-fade-in">
-        <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-800 text-slate-500">
+        <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-200 text-slate-500">
           <Bug className="h-10 w-10" />
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-2">No reports yet</h2>
-          <p className="text-slate-400 max-w-sm">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">No reports yet</h2>
+          <p className="text-slate-600 max-w-sm">
             Upload Playwright HTML reports to start analyzing failure patterns.
           </p>
         </div>
-        <Button size="lg" icon={<Upload className="h-5 w-5" />} onClick={() => navigate('/')}>
+        <Button size="lg" icon={<Upload className="h-5 w-5" />} onClick={() => setShowUploadModal(true)}>
           Upload First Report
         </Button>
+        {showUploadModal && (
+          <UploadReportModal
+            onClose={() => setShowUploadModal(false)}
+            onUploaded={() => {
+              setShowUploadModal(false);
+              loadReports();
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -896,15 +912,25 @@ export function FailurePatternsPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Failure Patterns</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
+          <h1 className="text-2xl font-bold text-slate-900">Failure Patterns</h1>
+          <p className="text-slate-600 text-sm mt-0.5">
             Cross-run analysis across {reports.length} report{reports.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => navigate('/')}>
+        <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => setShowUploadModal(true)}>
           Upload New
         </Button>
       </div>
+
+      {showUploadModal && (
+        <UploadReportModal
+          onClose={() => setShowUploadModal(false)}
+          onUploaded={() => {
+            setShowUploadModal(false);
+            loadReports();
+          }}
+        />
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -912,21 +938,21 @@ export function FailurePatternsPage() {
           label="New Regressions"
           value={regressions.length}
           sub={regressionPrevDate ? `since ${regressionPrevDate}` : 'need 2+ date groups'}
-          accent={regressions.length > 0 ? 'text-amber-400' : 'text-emerald-400'}
+          accent={regressions.length > 0 ? 'text-amber-600' : 'text-emerald-600'}
           icon={<AlertTriangle className="h-5 w-5" />}
         />
         <MetricCard
           label="Always Failing"
           value={consistentlyFailing}
           sub="fail in every run"
-          accent="text-red-400"
+          accent="text-red-600"
           icon={<AlertOctagon className="h-5 w-5" />}
         />
         <MetricCard
           label="Flaky Tests"
           value={flakyCount}
           sub="oscillate pass ↔ fail"
-          accent="text-amber-400"
+          accent="text-amber-600"
           icon={<RefreshCw className="h-5 w-5" />}
         />
         <MetricCard
@@ -935,7 +961,7 @@ export function FailurePatternsPage() {
           valueTitle={worstSuite}
           valueClassName="text-sm font-semibold break-all leading-snug"
           sub={worstSuiteRate != null ? `${worstSuiteRate}% fail rate` : undefined}
-          accent="text-orange-400"
+          accent="text-orange-600"
           icon={<FolderOpen className="h-5 w-5" />}
         />
         <MetricCard
@@ -943,7 +969,7 @@ export function FailurePatternsPage() {
           value={errorTrend > 1 ? 'Worsening' : errorTrend < -1 ? 'Improving' : 'Stable'}
           sub="first vs latest run"
           accent={
-            errorTrend > 1 ? 'text-red-400' : errorTrend < -1 ? 'text-emerald-400' : 'text-slate-400'
+            errorTrend > 1 ? 'text-red-600' : errorTrend < -1 ? 'text-emerald-600' : 'text-slate-600'
           }
           icon={
             errorTrend > 1 ? (
@@ -992,11 +1018,11 @@ export function FailurePatternsPage() {
                 margin={{ top: 4, right: 52, left: 8, bottom: 4 }}
                 barCategoryGap="30%"
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                 <XAxis
                   type="number"
                   domain={[0, 100]}
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  tick={{ fill: '#475569', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) => `${v}%`}
@@ -1005,14 +1031,14 @@ export function FailurePatternsPage() {
                   type="category"
                   dataKey="suiteName"
                   width={140}
-                  tick={{ fill: '#cbd5e1', fontSize: 11 }}
+                  tick={{ fill: '#334155', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v: string) => trunc(v, 20)}
                 />
                 <RechartsTooltip
                   content={<SuiteTooltip />}
-                  cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                  cursor={{ fill: 'rgba(15,23,42,0.03)' }}
                 />
                 <Bar dataKey="failRate" maxBarSize={20} radius={[0, 3, 3, 0]}>
                   {suiteHealth.map((s, i) => (
@@ -1041,15 +1067,15 @@ export function FailurePatternsPage() {
                 data={errorEvolution}
                 margin={{ top: 8, right: 16, left: -12, bottom: 8 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  axisLine={{ stroke: '#334155' }}
+                  tick={{ fill: '#475569', fontSize: 11 }}
+                  axisLine={{ stroke: '#cbd5e1' }}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  tick={{ fill: '#475569', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   allowDecimals={false}
@@ -1059,7 +1085,7 @@ export function FailurePatternsPage() {
                   iconType="circle"
                   iconSize={8}
                   formatter={(v) => (
-                    <span className="text-slate-300 text-xs">{v}</span>
+                    <span className="text-slate-700 text-xs">{v}</span>
                   )}
                 />
                 {(Object.keys(ERROR_COLORS) as (keyof typeof ERROR_COLORS)[]).map((key) => (
@@ -1083,10 +1109,10 @@ export function FailurePatternsPage() {
       {heatmapRows.length === 0 && suiteHealth.length === 0 && flakyCount === 0 && (
         <Card className="text-center py-12">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 mx-auto mb-4">
-            <BarChart2 className="h-8 w-8 text-emerald-400" />
+            <BarChart2 className="h-8 w-8 text-emerald-600" />
           </div>
-          <h3 className="text-lg font-semibold text-white mb-1">All tests passing</h3>
-          <p className="text-slate-400 text-sm">No failure patterns to display. Keep it up!</p>
+          <h3 className="text-lg font-semibold text-slate-900 mb-1">All tests passing</h3>
+          <p className="text-slate-600 text-sm">No failure patterns to display. Keep it up!</p>
         </Card>
       )}
     </div>

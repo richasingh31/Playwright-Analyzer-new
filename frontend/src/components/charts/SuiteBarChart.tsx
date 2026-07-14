@@ -36,22 +36,22 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
   if (!active || !payload?.length) return null;
   const total = payload.reduce((s, p) => s + p.value, 0);
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl backdrop-blur-sm text-sm min-w-[180px]">
-      <p className="font-semibold text-white mb-2 text-xs leading-snug break-words">{label}</p>
+    <div className="rounded-xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm text-sm min-w-[180px]">
+      <p className="font-semibold text-slate-900 mb-2 text-xs leading-snug break-words">{label}</p>
       {payload.map((p) =>
         p.value > 0 ? (
           <div key={p.name} className="flex items-center justify-between gap-6 py-0.5">
-            <span className="flex items-center gap-1.5 text-slate-300">
+            <span className="flex items-center gap-1.5 text-slate-700">
               <span className="h-2 w-2 rounded-full shrink-0" style={{ background: p.fill }} />
               {p.name}
             </span>
-            <span className="font-semibold text-white tabular-nums">{p.value}</span>
+            <span className="font-semibold text-slate-900 tabular-nums">{p.value}</span>
           </div>
         ) : null
       )}
-      <div className="border-t border-slate-700 mt-2 pt-2 flex justify-between text-xs">
-        <span className="text-slate-400">Total</span>
-        <span className="text-white font-bold tabular-nums">{total}</span>
+      <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-xs">
+        <span className="text-slate-500">Total</span>
+        <span className="text-slate-900 font-bold tabular-nums">{total}</span>
       </div>
     </div>
   );
@@ -72,7 +72,7 @@ function TotalLabel(props: {
       x={x + width + 6}
       y={y + height / 2}
       dominantBaseline="middle"
-      fill="#94a3b8"
+      fill="#475569"
       fontSize={11}
       fontWeight={600}
     >
@@ -103,7 +103,7 @@ export function SuiteBarChart({ suites }: Props) {
         margin={{ top: 4, right: 48, left: 8, bottom: 4 }}
         barCategoryGap="30%"
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
 
         {/* Number axis — horizontal, easy to scan */}
         <XAxis
@@ -119,7 +119,7 @@ export function SuiteBarChart({ suites }: Props) {
           type="category"
           dataKey="fullName"
           width={yAxisWidth}
-          tick={{ fill: '#cbd5e1', fontSize: 11 }}
+          tick={{ fill: '#334155', fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           tickFormatter={(v: string) =>
@@ -132,7 +132,7 @@ export function SuiteBarChart({ suites }: Props) {
           cursor={{ fill: 'rgba(99,102,241,0.06)' }}
         />
         <Legend
-          formatter={(v) => <span className="text-slate-300 text-xs">{v}</span>}
+          formatter={(v) => <span className="text-slate-700 text-xs">{v}</span>}
           iconType="circle"
           iconSize={8}
         />

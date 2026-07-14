@@ -7,6 +7,7 @@ import type { ParsedReport, ReportSummary } from '../types/report.types';
 export interface IReportRepository {
   save(report: ParsedReport): Promise<ParsedReport>;
   findById(id: string): Promise<ParsedReport | null>;
+  findByContentHash(contentHash: string): Promise<ParsedReport | null>;
   findAll(): Promise<ReportSummary[]>;
   delete(id: string): Promise<boolean>;
 }
@@ -21,6 +22,13 @@ class InMemoryReportRepository implements IReportRepository {
 
   async findById(id: string): Promise<ParsedReport | null> {
     return this.reports.get(id) ?? null;
+  }
+
+  async findByContentHash(contentHash: string): Promise<ParsedReport | null> {
+    for (const report of this.reports.values()) {
+      if (report.contentHash === contentHash) return report;
+    }
+    return null;
   }
 
   async findAll(): Promise<ReportSummary[]> {

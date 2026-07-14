@@ -67,46 +67,46 @@ function CustomTooltip({ active, payload }: TooltipProps) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl backdrop-blur-sm text-sm min-w-[210px]">
-      <p className="text-white font-semibold mb-0.5 truncate max-w-[190px]">{d.name}</p>
-      <p className="text-slate-400 text-xs mb-3">{d.date}</p>
+    <div className="rounded-xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm text-sm min-w-[210px]">
+      <p className="text-slate-900 font-semibold mb-0.5 truncate max-w-[190px]">{d.name}</p>
+      <p className="text-slate-500 text-xs mb-3">{d.date}</p>
 
       <div className="flex gap-3 mb-3">
         <div className="flex-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-center">
-          <p className="text-emerald-400 text-lg font-bold">{d.passRate}%</p>
+          <p className="text-emerald-600 text-lg font-bold">{d.passRate}%</p>
           <p className="text-emerald-500/70 text-xs">Pass</p>
         </div>
         <div className="flex-1 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-center">
-          <p className="text-red-400 text-lg font-bold">{d.failRate}%</p>
+          <p className="text-red-600 text-lg font-bold">{d.failRate}%</p>
           <p className="text-red-500/70 text-xs">Fail</p>
         </div>
       </div>
 
-      <div className="border-t border-slate-700 pt-2 space-y-1.5">
+      <div className="border-t border-slate-200 pt-2 space-y-1.5">
         <div className="flex justify-between gap-6">
-          <span className="text-slate-400">Total</span>
-          <span className="text-slate-200 font-medium">{d.total}</span>
+          <span className="text-slate-500">Total</span>
+          <span className="text-slate-800 font-medium">{d.total}</span>
         </div>
         <div className="flex justify-between gap-6">
-          <span className="text-emerald-400">Passed</span>
-          <span className="text-emerald-400 font-medium">{d.passed}</span>
+          <span className="text-emerald-600">Passed</span>
+          <span className="text-emerald-600 font-medium">{d.passed}</span>
         </div>
         {d.failed > 0 && (
           <div className="flex justify-between gap-6">
-            <span className="text-red-400">Failed</span>
-            <span className="text-red-400 font-medium">{d.failed}</span>
+            <span className="text-red-600">Failed</span>
+            <span className="text-red-600 font-medium">{d.failed}</span>
           </div>
         )}
         {d.skipped > 0 && (
           <div className="flex justify-between gap-6">
-            <span className="text-slate-400">Skipped</span>
-            <span className="text-slate-400 font-medium">{d.skipped}</span>
+            <span className="text-slate-500">Skipped</span>
+            <span className="text-slate-500 font-medium">{d.skipped}</span>
           </div>
         )}
         {d.flaky > 0 && (
           <div className="flex justify-between gap-6">
-            <span className="text-amber-400">Flaky</span>
-            <span className="text-amber-400 font-medium">{d.flaky}</span>
+            <span className="text-amber-600">Flaky</span>
+            <span className="text-amber-600 font-medium">{d.flaky}</span>
           </div>
         )}
       </div>
@@ -143,7 +143,7 @@ export function TrendsLineChart({ reports }: Props) {
   return (
     <div className="space-y-3">
       {/* Legend */}
-      <div className="flex items-center gap-5 px-1 text-xs text-slate-400">
+      <div className="flex items-center gap-5 px-1 text-xs text-slate-500">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
           Pass Rate
@@ -160,11 +160,11 @@ export function TrendsLineChart({ reports }: Props) {
           margin={{ top: 8, right: 16, left: -12, bottom: angleLabels ? 52 : 8 }}
           barCategoryGap="30%"
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fill: '#94a3b8', fontSize: 11 }}
-            axisLine={{ stroke: '#334155' }}
+            tick={{ fill: '#475569', fontSize: 11 }}
+            axisLine={{ stroke: '#cbd5e1' }}
             tickLine={false}
             angle={angleLabels ? -35 : 0}
             textAnchor={angleLabels ? 'end' : 'middle'}
@@ -172,7 +172,7 @@ export function TrendsLineChart({ reports }: Props) {
           />
           <YAxis
             domain={[0, 100]}
-            tick={{ fill: '#94a3b8', fontSize: 11 }}
+            tick={{ fill: '#475569', fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(v) => `${v}%`}
@@ -180,7 +180,7 @@ export function TrendsLineChart({ reports }: Props) {
           />
           <Tooltip
             content={<CustomTooltip />}
-            cursor={{ fill: 'rgba(255,255,255,0.04)', radius: 4 }}
+            cursor={{ fill: 'rgba(15,23,42,0.04)', radius: 4 }}
           />
           {/* Pass rate — bottom green segment */}
           <Bar dataKey="passRate" stackId="a" fill="#10b981" fillOpacity={0.85} maxBarSize={60}>

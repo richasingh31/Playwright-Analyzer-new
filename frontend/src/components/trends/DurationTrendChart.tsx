@@ -33,11 +33,11 @@ function DurationTooltip({
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="rounded-xl border border-slate-600 bg-slate-800/95 p-3 shadow-2xl text-xs">
-      <p className="font-semibold text-white mb-2 max-w-[200px] truncate">{d.name}</p>
+    <div className="rounded-xl border border-slate-400 bg-slate-200/95 p-3 shadow-2xl text-xs">
+      <p className="font-semibold text-slate-900 mb-2 max-w-[200px] truncate">{d.name}</p>
       <div className="flex justify-between gap-4">
-        <span className="text-slate-400">Suite Duration</span>
-        <span className="text-indigo-400 font-bold">{formatDuration(d.durationMs)}</span>
+        <span className="text-slate-600">Suite Duration</span>
+        <span className="text-indigo-600 font-bold">{formatDuration(d.durationMs)}</span>
       </div>
     </div>
   );
@@ -66,17 +66,17 @@ export function DurationTrendChart({ reports }: { reports: ReportSummary[] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <LineChart data={data} margin={{ top: 8, right: 24, left: -12, bottom: rotate ? 40 : 8 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
         <XAxis
           dataKey="date"
-          tick={{ fill: '#94a3b8', fontSize: 11 }}
-          axisLine={{ stroke: '#334155' }}
+          tick={{ fill: '#475569', fontSize: 11 }}
+          axisLine={{ stroke: '#cbd5e1' }}
           tickLine={false}
           angle={rotate ? -35 : 0}
           textAnchor={rotate ? 'end' : 'middle'}
         />
         <YAxis
-          tick={{ fill: '#94a3b8', fontSize: 11 }}
+          tick={{ fill: '#475569', fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           tickFormatter={(v: number) => v >= 60 ? `${Math.floor(v / 60)}m` : `${v}s`}

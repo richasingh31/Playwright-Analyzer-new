@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Upload,
   Search,
@@ -18,6 +17,7 @@ import { formatDate } from '../utils/helpers';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
+import { UploadReportModal } from '../components/upload/UploadReportModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ const CATEGORY_STYLE: Record<string, { label: string; color: string; bg: string 
   network:             { label: 'Network',    color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
   'element-not-found': { label: 'Element',    color: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
   runtime:             { label: 'Runtime',    color: '#ec4899', bg: 'rgba(236,72,153,0.12)' },
-  unknown:             { label: 'Unknown',    color: '#64748b', bg: 'rgba(100,116,139,0.12)' },
+  application:         { label: 'Application', color: '#64748b', bg: 'rgba(100,116,139,0.12)' },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ function buildApiGroups(reports: ParsedReport[]): {
           if (rd) {
             latestStatus = rd.status;
             latestError = rd.errorMessage
-              ? { message: rd.errorMessage, category: rd.errorCategory ?? 'unknown', stack: rd.errorStack }
+              ? { message: rd.errorMessage, category: rd.errorCategory ?? 'application', stack: rd.errorStack }
               : undefined;
           }
         }
@@ -192,9 +192,9 @@ function buildApiGroups(reports: ParsedReport[]): {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatusIcon({ status }: { status: TestStatus }) {
-  if (status === 'passed') return <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />;
-  if (status === 'failed') return <XCircle       className="h-4 w-4 text-red-400 shrink-0" />;
-  if (status === 'flaky')  return <AlertCircle   className="h-4 w-4 text-amber-400 shrink-0" />;
+  if (status === 'passed') return <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />;
+  if (status === 'failed') return <XCircle       className="h-4 w-4 text-red-600 shrink-0" />;
+  if (status === 'flaky')  return <AlertCircle   className="h-4 w-4 text-amber-600 shrink-0" />;
   return                          <SkipForward   className="h-4 w-4 text-slate-500 shrink-0" />;
 }
 
@@ -238,20 +238,20 @@ function ScenarioItem({
 }) {
   const [expanded, setExpanded] = useState(false);
   const cat = scenario.latestError
-    ? (CATEGORY_STYLE[scenario.latestError.category] ?? CATEGORY_STYLE.unknown)
+    ? (CATEGORY_STYLE[scenario.latestError.category] ?? CATEGORY_STYLE.application)
     : null;
 
   return (
     <div>
       <div
-        className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/50 transition-colors rounded-lg group cursor-default"
+        className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-200/50 transition-colors rounded-lg group cursor-default"
         onClick={() => scenario.latestError && setExpanded((p) => !p)}
         style={{ cursor: scenario.latestError ? 'pointer' : 'default' }}
       >
         <StatusIcon status={scenario.latestStatus} />
 
         <span
-          className="flex-1 min-w-0 text-sm text-slate-200 truncate"
+          className="flex-1 min-w-0 text-sm text-slate-800 truncate"
           title={scenario.fullTitle}
         >
           {scenario.title}
@@ -272,14 +272,14 @@ function ScenarioItem({
 
         {/* Fail count across runs */}
         {scenario.failCount > 1 && reportIds.length > 1 && (
-          <span className="shrink-0 text-xs text-red-400/70 tabular-nums">
+          <span className="shrink-0 text-xs text-red-600/70 tabular-nums">
             {scenario.failCount}× failed
           </span>
         )}
 
         {/* Expand chevron for error details */}
         {scenario.latestError && (
-          <span className="shrink-0 text-slate-600 group-hover:text-slate-400 transition-colors">
+          <span className="shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
             {expanded ? (
               <ChevronDown className="h-3.5 w-3.5" />
             ) : (
@@ -293,7 +293,7 @@ function ScenarioItem({
       {expanded && scenario.latestError && (
         <div className="mx-4 mb-2 rounded-lg border border-red-500/15 bg-red-500/5 px-4 py-3">
           <p
-            className="text-xs text-red-300/80 leading-relaxed mb-2"
+            className="text-xs text-red-700/80 leading-relaxed mb-2"
             style={{ fontFamily: 'ui-monospace, monospace' }}
           >
             {scenario.latestError.message.split('\n')[0]}
@@ -325,20 +325,20 @@ function ApiGroupBlock({
   const passRate = group.total > 0 ? Math.round((group.passCount / group.total) * 100) : 0;
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-800/60 overflow-hidden backdrop-blur-sm">
+    <div className="rounded-2xl border border-slate-300/60 bg-slate-200/60 overflow-hidden backdrop-blur-sm">
       {/* Group header */}
       <button
-        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-slate-700/30 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-slate-300/30 transition-colors text-left"
         onClick={() => setOpen((p) => !p)}
       >
-        <span className="text-slate-400 shrink-0">
+        <span className="text-slate-600 shrink-0">
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </span>
 
-        <FileText className="h-4 w-4 text-indigo-400 shrink-0" />
+        <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
 
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-semibold text-white truncate block" title={group.apiKey}>
+          <span className="text-sm font-semibold text-slate-900 truncate block" title={group.apiKey}>
             {group.apiName}
           </span>
           <span className="text-xs text-slate-500 truncate block" title={group.file}>
@@ -349,12 +349,12 @@ function ApiGroupBlock({
         {/* Stats chips */}
         <div className="flex items-center gap-2 shrink-0">
           {group.failCount > 0 && (
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 border border-red-500/20">
               {group.failCount} failed
             </span>
           )}
           {group.flakyCount > 0 && (
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
               {group.flakyCount} flaky
             </span>
           )}
@@ -362,7 +362,7 @@ function ApiGroupBlock({
 
           {/* Pass rate mini bar */}
           <div className="flex items-center gap-1.5">
-            <div className="w-16 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+            <div className="w-16 h-1.5 rounded-full bg-slate-300 overflow-hidden">
               <div
                 className="h-full rounded-full transition-all"
                 style={{
@@ -383,7 +383,7 @@ function ApiGroupBlock({
 
       {/* Scenario list */}
       {open && (
-        <div className="border-t border-slate-700/40 py-2">
+        <div className="border-t border-slate-300/40 py-2">
           {group.scenarios.map((scenario) => (
             <ScenarioItem key={scenario.fullTitle} scenario={scenario} reportIds={reportIds} />
           ))}
@@ -398,20 +398,24 @@ function ApiGroupBlock({
 type StatusFilter = 'all' | TestStatus;
 
 export function ApiScenariosPage() {
-  const navigate = useNavigate();
   const [reports, setReports] = useState<ParsedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
-  useEffect(() => {
-    reportsApi
+  const loadReports = () => {
+    return reportsApi
       .getAll()
       .then((summaries) => Promise.all(summaries.map((s) => reportsApi.getById(s.id))))
       .then(setReports)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadReports();
   }, []);
 
   const { apiGroups, sortedReports } = useMemo(
@@ -455,27 +459,36 @@ export function ApiScenariosPage() {
   if (reports.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-6 py-24 animate-fade-in">
-        <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-800 text-slate-500">
+        <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-200 text-slate-500">
           <Grid3X3 className="h-10 w-10" />
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-2">No reports yet</h2>
-          <p className="text-slate-400 max-w-sm">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">No reports yet</h2>
+          <p className="text-slate-600 max-w-sm">
             Upload Playwright HTML reports to explore API and scenario combinations.
           </p>
         </div>
-        <Button size="lg" icon={<Upload className="h-5 w-5" />} onClick={() => navigate('/')}>
+        <Button size="lg" icon={<Upload className="h-5 w-5" />} onClick={() => setShowUploadModal(true)}>
           Upload First Report
         </Button>
+        {showUploadModal && (
+          <UploadReportModal
+            onClose={() => setShowUploadModal(false)}
+            onUploaded={() => {
+              setShowUploadModal(false);
+              loadReports();
+            }}
+          />
+        )}
       </div>
     );
   }
 
   const STATUS_TABS: { key: StatusFilter; label: string; count: number; color: string }[] = [
-    { key: 'all',     label: 'All',     count: totals.scenarios, color: 'text-slate-300' },
-    { key: 'failed',  label: 'Failed',  count: totals.failed,    color: 'text-red-400' },
-    { key: 'flaky',   label: 'Flaky',   count: totals.flaky,     color: 'text-amber-400' },
-    { key: 'passed',  label: 'Passed',  count: totals.passed,    color: 'text-emerald-400' },
+    { key: 'all',     label: 'All',     count: totals.scenarios, color: 'text-slate-700' },
+    { key: 'failed',  label: 'Failed',  count: totals.failed,    color: 'text-red-600' },
+    { key: 'flaky',   label: 'Flaky',   count: totals.flaky,     color: 'text-amber-600' },
+    { key: 'passed',  label: 'Passed',  count: totals.passed,    color: 'text-emerald-600' },
     { key: 'skipped', label: 'Skipped', count: totals.skipped,   color: 'text-slate-500' },
   ];
 
@@ -484,36 +497,46 @@ export function ApiScenariosPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">API &amp; Scenarios</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
+          <h1 className="text-2xl font-bold text-slate-900">API &amp; Scenarios</h1>
+          <p className="text-slate-600 text-sm mt-0.5">
             {totals.apis} API{totals.apis !== 1 ? 's' : ''} · {totals.scenarios} scenario{totals.scenarios !== 1 ? 's' : ''} across {reports.length} report{reports.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => navigate('/')}>
+        <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => setShowUploadModal(true)}>
           Upload New
         </Button>
       </div>
 
+      {showUploadModal && (
+        <UploadReportModal
+          onClose={() => setShowUploadModal(false)}
+          onUploaded={() => {
+            setShowUploadModal(false);
+            loadReports();
+          }}
+        />
+      )}
+
       {/* Summary stat chips */}
       <div className="flex items-center gap-3 flex-wrap">
         {totals.failed > 0 && (
-          <span className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
+          <span className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full bg-red-500/10 text-red-600 border border-red-500/20">
             <XCircle className="h-3.5 w-3.5" />
             {totals.failed} failing
           </span>
         )}
         {totals.flaky > 0 && (
-          <span className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <span className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
             <AlertCircle className="h-3.5 w-3.5" />
             {totals.flaky} flaky
           </span>
         )}
-        <span className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <span className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
           <CheckCircle2 className="h-3.5 w-3.5" />
           {totals.passed} passing
         </span>
         {sortedReports.length > 1 && (
-          <span className="ml-auto text-xs text-slate-600">
+          <span className="ml-auto text-xs text-slate-400">
             Run history: {sortedReports.map((r) => formatDate(
               r.metadata?.startTime ? new Date(r.metadata.startTime).toISOString() : r.uploadedAt
             ).split(',')[0]).join(' → ')}
@@ -532,7 +555,7 @@ export function ApiScenariosPage() {
               placeholder="Search scenarios…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-900/60 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full bg-slate-100/60 border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
             />
           </div>
 
@@ -545,12 +568,12 @@ export function ApiScenariosPage() {
                   onClick={() => setStatusFilter(key)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     statusFilter === key
-                      ? 'bg-slate-700 text-white'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                      ? 'bg-slate-300 text-slate-900'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  <span className={statusFilter === key ? 'text-white' : color}>{label}</span>
-                  <span className={`tabular-nums ${statusFilter === key ? 'text-slate-300' : 'text-slate-600'}`}>
+                  <span className={statusFilter === key ? 'text-slate-900' : color}>{label}</span>
+                  <span className={`tabular-nums ${statusFilter === key ? 'text-slate-700' : 'text-slate-400'}`}>
                     {count}
                   </span>
                 </button>
@@ -582,10 +605,10 @@ export function ApiScenariosPage() {
       {/* Run legend (only when multiple reports) */}
       {sortedReports.length > 1 && (
         <div className="flex items-center gap-4 pt-2 flex-wrap">
-          <span className="text-xs text-slate-600 uppercase tracking-wider font-medium">Run dots legend</span>
+          <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">Run dots legend</span>
           {sortedReports.map((r, i) => (
             <span key={r.id} className="flex items-center gap-1.5 text-xs text-slate-500">
-              <span className="font-mono text-slate-600">#{i + 1}</span>
+              <span className="font-mono text-slate-400">#{i + 1}</span>
               {r.name}
             </span>
           ))}

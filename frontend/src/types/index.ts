@@ -5,7 +5,7 @@ export type ErrorCategory =
   | 'network'
   | 'element-not-found'
   | 'runtime'
-  | 'unknown';
+  | 'application';
 
 export interface TestError {
   message: string;

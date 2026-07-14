@@ -3,13 +3,21 @@ import type { ParsedReport, ReportSummary, UploadResponse } from '../types';
 
 const http = axios.create({ baseURL: '/api', timeout: 30_000 });
 
+export class ApiError extends Error {
+  status?: number;
+  existingId?: string;
+}
+
 http.interceptors.response.use(
   (r) => r,
   (err) => {
     const msg: string = !err.response
       ? 'Cannot reach the server. Make sure the backend is running (cd backend && npm run dev).'
       : (err.response.data?.error ?? err.message ?? 'Unexpected error');
-    return Promise.reject(new Error(msg));
+    const apiError = new ApiError(msg);
+    apiError.status = err.response?.status;
+    apiError.existingId = err.response?.data?.existingId;
+    return Promise.reject(apiError);
   },
 );
 

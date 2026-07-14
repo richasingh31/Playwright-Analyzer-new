@@ -5,7 +5,7 @@ export type ErrorCategory =
   | 'network'
   | 'element-not-found'
   | 'runtime'
-  | 'unknown';
+  | 'application';
 
 export interface TestError {
   message: string;
@@ -63,6 +63,7 @@ export interface ParsedReport {
   id: string;
   name: string;
   uploadedAt: Date;
+  contentHash: string;
   stats: ReportStats;
   suites: TestSuite[];
   errorGroups: ErrorGroup[];

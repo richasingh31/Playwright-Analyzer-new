@@ -98,27 +98,27 @@ function buildRecs(report: ParsedReport): Rec[] {
 const CFG: Record<Severity, { Icon: React.ElementType; badge: string; bar: string }> = {
   critical: {
     Icon: AlertCircle,
-    badge: 'text-red-400 bg-red-500/10 border-red-500/30',
+    badge: 'text-red-600 bg-red-500/10 border-red-500/30',
     bar:   'border-l-2 border-red-500/70 bg-red-500/5',
   },
   high: {
     Icon: AlertTriangle,
-    badge: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
+    badge: 'text-orange-600 bg-orange-500/10 border-orange-500/30',
     bar:   'border-l-2 border-orange-500/60 bg-orange-500/5',
   },
   medium: {
     Icon: AlertTriangle,
-    badge: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+    badge: 'text-amber-600 bg-amber-500/10 border-amber-500/30',
     bar:   'border-l-2 border-amber-500/40',
   },
   low: {
     Icon: Info,
-    badge: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+    badge: 'text-blue-600 bg-blue-500/10 border-blue-500/30',
     bar:   'border-l-2 border-blue-500/40',
   },
   good: {
     Icon: CheckCircle2,
-    badge: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+    badge: 'text-emerald-600 bg-emerald-500/10 border-emerald-500/30',
     bar:   'border-l-2 border-emerald-500/50 bg-emerald-500/5',
   },
 };
@@ -131,12 +131,12 @@ export function SmartRecommendations({ report }: { report: ParsedReport }) {
   const recs = buildRecs(report);
 
   return (
-    <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
+    <div className="rounded-xl border border-slate-300/50 bg-slate-200/30 p-5">
       <div className="flex items-center gap-2 mb-4">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/15">
-          <Lightbulb className="h-4 w-4 text-indigo-400" />
+          <Lightbulb className="h-4 w-4 text-indigo-600" />
         </div>
-        <h3 className="text-sm font-semibold text-white">Smart Recommendations</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Smart Recommendations</h3>
         <span className="ml-auto text-xs text-slate-500">{recs.length} action item{recs.length !== 1 ? 's' : ''}</span>
       </div>
 
@@ -152,9 +152,9 @@ export function SmartRecommendations({ report }: { report: ParsedReport }) {
                     <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded border ${badge}`}>
                       {LABELS[rec.severity]}
                     </span>
-                    <span className="text-sm font-medium text-white">{rec.title}</span>
+                    <span className="text-sm font-medium text-slate-900">{rec.title}</span>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">{rec.description}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed">{rec.description}</p>
                 </div>
               </div>
             </div>

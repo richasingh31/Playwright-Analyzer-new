@@ -54,8 +54,8 @@ function StatCard({
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-2xl font-bold text-white">{value}</p>
-        <p className="text-xs text-slate-400">{label}</p>
+        <p className="text-2xl font-bold text-slate-900">{value}</p>
+        <p className="text-xs text-slate-600">{label}</p>
         {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
       </div>
     </Card>
@@ -69,36 +69,36 @@ function SuiteRow({ suite, reportId }: { suite: TestSuite; reportId: string }) {
   const all = flattenTests([suite]);
 
   return (
-    <div className="border border-slate-700/60 rounded-xl overflow-hidden">
+    <div className="border border-slate-300/60 rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen((p) => !p)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/60 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-200/60 transition-colors text-left"
       >
         {open ? (
-          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+          <ChevronDown className="h-4 w-4 text-slate-600 shrink-0" />
         ) : (
-          <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+          <ChevronRight className="h-4 w-4 text-slate-600 shrink-0" />
         )}
-        <span className="flex-1 text-sm font-medium text-white truncate">{suite.title}</span>
+        <span className="flex-1 text-sm font-medium text-slate-900 truncate">{suite.title}</span>
         <span className="text-xs text-slate-500 font-mono shrink-0">{suite.file}</span>
         <div className="flex items-center gap-2 ml-3 shrink-0">
           {suite.stats.passed > 0 && (
-            <span className="text-xs text-emerald-400">{suite.stats.passed}✓</span>
+            <span className="text-xs text-emerald-600">{suite.stats.passed}✓</span>
           )}
           {suite.stats.failed > 0 && (
-            <span className="text-xs text-red-400">{suite.stats.failed}✗</span>
+            <span className="text-xs text-red-600">{suite.stats.failed}✗</span>
           )}
           {suite.stats.skipped > 0 && (
-            <span className="text-xs text-slate-400">{suite.stats.skipped}⊘</span>
+            <span className="text-xs text-slate-600">{suite.stats.skipped}⊘</span>
           )}
           {suite.stats.flaky > 0 && (
-            <span className="text-xs text-amber-400">{suite.stats.flaky}~</span>
+            <span className="text-xs text-amber-600">{suite.stats.flaky}~</span>
           )}
         </div>
       </button>
 
       {open && (
-        <div className="border-t border-slate-700/40 divide-y divide-slate-700/30">
+        <div className="border-t border-slate-300/40 divide-y divide-slate-300/30">
           {all.map((test) => (
             <TestRow key={test.id} test={test} reportId={reportId} />
           ))}
@@ -115,7 +115,7 @@ function TestRow({ test }: { test: TestResult; reportId: string }) {
   const showStack = expanded && test.error?.stack;
 
   return (
-    <div className="px-4 py-2.5 hover:bg-slate-800/30 transition-colors">
+    <div className="px-4 py-2.5 hover:bg-slate-200/30 transition-colors">
       <div
         className="flex items-start gap-3 cursor-pointer"
         onClick={() => test.error && setExpanded((p) => !p)}
@@ -124,14 +124,14 @@ function TestRow({ test }: { test: TestResult; reportId: string }) {
           <StatusBadge status={test.status} size="sm" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-slate-200 truncate">{test.title}</p>
+          <p className="text-sm text-slate-800 truncate">{test.title}</p>
           {test.error && (
-            <p className="text-xs text-red-400/80 mt-0.5 truncate">{test.error.message}</p>
+            <p className="text-xs text-red-600/80 mt-0.5 truncate">{test.error.message}</p>
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
           {test.retries > 0 && (
-            <span className="text-xs text-amber-400/70">↻ {test.retries}</span>
+            <span className="text-xs text-amber-600/70">↻ {test.retries}</span>
           )}
           <span className="text-xs text-slate-500 font-mono">{formatDuration(test.duration)}</span>
           {test.error && (
@@ -143,8 +143,8 @@ function TestRow({ test }: { test: TestResult; reportId: string }) {
       </div>
 
       {showStack && (
-        <div className="mt-2 ml-20 rounded-lg bg-slate-900/80 border border-slate-700/50 p-3 overflow-x-auto">
-          <pre className="text-xs text-slate-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+        <div className="mt-2 ml-20 rounded-lg bg-slate-100/80 border border-slate-300/50 p-3 overflow-x-auto">
+          <pre className="text-xs text-slate-600 font-mono leading-relaxed whitespace-pre-wrap break-all">
             {test.error?.stack}
           </pre>
         </div>
@@ -190,8 +190,8 @@ export function AnalysisPage() {
           All Reports
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-white truncate">{report.name}</h1>
-          <div className="flex items-center gap-4 mt-1 text-xs text-slate-400">
+          <h1 className="text-2xl font-bold text-slate-900 truncate">{report.name}</h1>
+          <div className="flex items-center gap-4 mt-1 text-xs text-slate-600">
             <span className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" />
               {formatDate(report.metadata?.startTime ? new Date(report.metadata.startTime).toISOString() : report.uploadedAt)}
@@ -210,10 +210,10 @@ export function AnalysisPage() {
           <div
             className={`flex items-center gap-2 rounded-xl px-4 py-2 border ${
               stats.passRate >= 90
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
                 : stats.passRate >= 70
-                ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-                : 'border-red-500/30 bg-red-500/10 text-red-400'
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-600'
+                : 'border-red-500/30 bg-red-500/10 text-red-600'
             }`}
           >
             <span className="text-2xl font-bold">{stats.passRate}%</span>
@@ -232,41 +232,41 @@ export function AnalysisPage() {
           label="Total"
           value={stats.total}
           icon={<span className="text-lg">🧪</span>}
-          color="bg-slate-700/60"
+          color="bg-slate-300/60"
           sub={formatDuration(stats.duration)}
         />
         <StatCard
           label="Passed"
           value={stats.passed}
-          icon={<CheckCircle2 className="h-5 w-5 text-emerald-400" />}
+          icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
           color="bg-emerald-500/15"
           onClick={() => navigate(`/analysis/${id}/category/passed`)}
         />
         <StatCard
           label="Failed"
           value={stats.failed}
-          icon={<XCircle className="h-5 w-5 text-red-400" />}
+          icon={<XCircle className="h-5 w-5 text-red-600" />}
           color="bg-red-500/15"
           onClick={stats.failed > 0 ? () => navigate(`/analysis/${id}/category/failed`) : undefined}
         />
         <StatCard
           label="Skipped"
           value={stats.skipped}
-          icon={<SkipForward className="h-5 w-5 text-slate-400" />}
-          color="bg-slate-700/60"
+          icon={<SkipForward className="h-5 w-5 text-slate-600" />}
+          color="bg-slate-300/60"
           onClick={stats.skipped > 0 ? () => navigate(`/analysis/${id}/category/skipped`) : undefined}
         />
         <StatCard
           label="Flaky"
           value={stats.flaky}
-          icon={<AlertTriangle className="h-5 w-5 text-amber-400" />}
+          icon={<AlertTriangle className="h-5 w-5 text-amber-600" />}
           color="bg-amber-500/15"
           onClick={stats.flaky > 0 ? () => navigate(`/analysis/${id}/category/flaky`) : undefined}
         />
         <StatCard
           label="Duration"
           value={formatDuration(stats.duration)}
-          icon={<Clock className="h-5 w-5 text-indigo-400" />}
+          icon={<Clock className="h-5 w-5 text-indigo-600" />}
           color="bg-indigo-500/15"
         />
       </div>
@@ -304,7 +304,7 @@ export function AnalysisPage() {
                 <Link
                   key={g.category}
                   to={`/analysis/${id}/category/failed?error=${g.category}`}
-                  className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-slate-700"
+                  className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-slate-300"
                   style={{ borderColor: cfg.hex + '50', color: cfg.hex }}
                 >
                   {cfg.icon} {g.label}

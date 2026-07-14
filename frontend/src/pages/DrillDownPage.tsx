@@ -50,7 +50,7 @@ function CategoryPills({
           'rounded-full px-3 py-1 text-xs font-medium border transition-all',
           active === ''
             ? 'bg-indigo-600 border-indigo-500 text-white'
-            : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white',
+            : 'border-slate-300 text-slate-600 hover:border-slate-500 hover:text-slate-900',
         )}
       >
         All ({tests.length})
@@ -64,8 +64,8 @@ function CategoryPills({
             className={clsx(
               'rounded-full px-3 py-1 text-xs font-medium border transition-all',
               active === cat
-                ? 'text-white'
-                : 'border-slate-700 text-slate-400 hover:text-white hover:border-slate-500',
+                ? 'text-slate-900'
+                : 'border-slate-300 text-slate-600 hover:text-slate-900 hover:border-slate-500',
             )}
             style={
               active === cat
@@ -88,18 +88,18 @@ function TestCard({ test }: { test: TestResult }) {
   const hasDetails = !!(test.error?.stack || test.error?.message);
 
   return (
-    <div className="border border-slate-700/60 rounded-xl overflow-hidden">
+    <div className="border border-slate-300/60 rounded-xl overflow-hidden">
       <button
         onClick={() => hasDetails && setOpen((p) => !p)}
         className={clsx(
           'w-full flex items-start gap-3 p-4 text-left transition-colors',
-          hasDetails ? 'hover:bg-slate-800/40 cursor-pointer' : 'cursor-default',
+          hasDetails ? 'hover:bg-slate-200/40 cursor-pointer' : 'cursor-default',
         )}
       >
         <StatusBadge status={test.status} size="sm" />
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white">{test.title}</p>
+          <p className="text-sm font-medium text-slate-900">{test.title}</p>
           <p className="text-xs text-slate-500 mt-0.5 truncate">{test.fullTitle}</p>
 
           {test.error && (
@@ -110,18 +110,18 @@ function TestCard({ test }: { test: TestResult }) {
               >
                 {ERROR_CATEGORY_CONFIG[test.error.category].icon}
               </span>
-              <p className="text-xs text-red-400/90 line-clamp-2">{test.error.message}</p>
+              <p className="text-xs text-red-600/90 line-clamp-2">{test.error.message}</p>
             </div>
           )}
         </div>
 
         <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+          <div className="flex items-center gap-1.5 text-xs text-slate-600">
             <Clock className="h-3 w-3" />
             {formatDuration(test.duration)}
           </div>
           {test.retries > 0 && (
-            <div className="flex items-center gap-1 text-xs text-amber-400">
+            <div className="flex items-center gap-1 text-xs text-amber-600">
               <RefreshCw className="h-3 w-3" />
               {test.retries} retr{test.retries === 1 ? 'y' : 'ies'}
             </div>
@@ -135,14 +135,14 @@ function TestCard({ test }: { test: TestResult }) {
       </button>
 
       {/* File location */}
-      <div className="px-4 pb-2 flex items-center gap-1.5 text-xs text-slate-600">
+      <div className="px-4 pb-2 flex items-center gap-1.5 text-xs text-slate-400">
         <FileCode className="h-3 w-3" />
         <span className="font-mono">{test.file}{test.line ? `:${test.line}` : ''}</span>
       </div>
 
       {/* Expanded error detail */}
       {open && test.error && (
-        <div className="border-t border-slate-700/40 p-4 bg-slate-900/60">
+        <div className="border-t border-slate-300/40 p-4 bg-slate-100/60">
           <div className="mb-3 flex items-center gap-2">
             <span className="text-sm">{ERROR_CATEGORY_CONFIG[test.error.category].icon}</span>
             <span
@@ -153,19 +153,19 @@ function TestCard({ test }: { test: TestResult }) {
             </span>
           </div>
 
-          <div className="rounded-lg bg-red-950/40 border border-red-500/20 p-3 mb-3">
-            <p className="text-xs text-red-300 font-mono leading-relaxed">
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-3">
+            <p className="text-xs text-red-700 font-mono leading-relaxed">
               {test.error.message}
             </p>
           </div>
 
           {test.error.stack && (
             <details>
-              <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-300 mb-2 select-none">
+              <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-700 mb-2 select-none">
                 Stack trace
               </summary>
-              <div className="rounded-lg bg-slate-900 border border-slate-700/40 p-3 overflow-x-auto">
-                <pre className="text-xs text-slate-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+              <div className="rounded-lg bg-slate-100 border border-slate-300/40 p-3 overflow-x-auto">
+                <pre className="text-xs text-slate-600 font-mono leading-relaxed whitespace-pre-wrap break-all">
                   {test.error.stack}
                 </pre>
               </div>
@@ -219,17 +219,17 @@ export function DrillDownPage() {
     <div className="animate-slide-up space-y-6">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm">
-        <Link to="/" className="text-slate-500 hover:text-slate-300 transition-colors">
+        <Link to="/" className="text-slate-500 hover:text-slate-700 transition-colors">
           Home
         </Link>
-        <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+        <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
         <Link
           to={`/analysis/${id}`}
-          className="text-slate-500 hover:text-slate-300 transition-colors"
+          className="text-slate-500 hover:text-slate-700 transition-colors"
         >
           {report.name}
         </Link>
-        <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+        <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
         <span className={cfg.color}>{cfg.label} Tests</span>
       </div>
 
@@ -244,9 +244,9 @@ export function DrillDownPage() {
           Back to Analysis
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-slate-900">
             {cfg.label} Tests
-            <span className="ml-2 text-lg text-slate-400 font-normal">
+            <span className="ml-2 text-lg text-slate-600 font-normal">
               ({filtered.length}{errorFilter ? ` filtered from ${allTests.filter((t) => t.status === statusFilter).length}` : ''})
             </span>
           </h1>
@@ -269,8 +269,8 @@ export function DrillDownPage() {
       {filtered.length === 0 ? (
         <Card className="text-center py-16">
           <div className="text-4xl mb-3">🎉</div>
-          <p className="text-white font-semibold">No tests match this filter</p>
-          <p className="text-slate-400 text-sm mt-1">Try clearing the category filter.</p>
+          <p className="text-slate-900 font-semibold">No tests match this filter</p>
+          <p className="text-slate-600 text-sm mt-1">Try clearing the category filter.</p>
           <Button
             variant="secondary"
             size="sm"
@@ -291,11 +291,11 @@ export function DrillDownPage() {
       {/* Summary footer */}
       {filtered.length > 0 && (statusFilter === 'failed' || statusFilter === 'flaky') && (
         <Card className="flex items-center gap-3 py-3">
-          <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
-          <p className="text-sm text-slate-300">
-            <span className="text-white font-semibold">{filtered.length}</span> failing tests found.
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <p className="text-sm text-slate-700">
+            <span className="text-slate-900 font-semibold">{filtered.length}</span> failing tests found.
             Total suite duration:{' '}
-            <span className="text-white font-semibold">
+            <span className="text-slate-900 font-semibold">
               {formatDuration(filtered.reduce((s, t) => s + t.duration, 0))}
             </span>
           </p>

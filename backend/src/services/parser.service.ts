@@ -44,7 +44,7 @@ function categorizeError(message: string): ErrorCategory {
   for (const { pattern, category } of ERROR_PATTERNS) {
     if (pattern.test(message)) return category;
   }
-  return 'unknown';
+  return 'application';
 }
 
 // ── Decompression helpers ─────────────────────────────────────────────────────
@@ -311,7 +311,7 @@ function buildErrorGroups(suites: TestSuite[]): ErrorGroup[] {
     network: 'Network Errors',
     'element-not-found': 'Element Not Found',
     runtime: 'Runtime Errors',
-    unknown: 'Unknown Errors',
+    application: 'Application Errors',
   };
 
   return Array.from(grouped.entries())
@@ -329,6 +329,7 @@ function buildErrorGroups(suites: TestSuite[]): ErrorGroup[] {
 export async function parsePlaywrightReport(
   fileBuffer: Buffer,
   fileName: string,
+  contentHash: string,
 ): Promise<ParsedReport> {
   const html = fileBuffer.toString('utf-8');
   const json = extractReportJson(html);
@@ -369,6 +370,7 @@ export async function parsePlaywrightReport(
     id: uuidv4(),
     name: fileName.replace(/\.html?$/i, ''),
     uploadedAt: new Date(),
+    contentHash,
     stats: {
       total,
       passed,
