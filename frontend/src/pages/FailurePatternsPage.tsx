@@ -4,21 +4,16 @@ import {
   Upload,
   AlertOctagon,
   RefreshCw,
-  FolderOpen,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   BarChart2,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
   XCircle,
+  X,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
   BarChart,
   Bar,
   XAxis,
@@ -27,6 +22,7 @@ import {
   Tooltip as RechartsTooltip,
   Legend,
   Cell,
+  Treemap,
 } from 'recharts';
 import { reportsApi } from '../api/client';
 import type { ParsedReport } from '../types';
@@ -53,11 +49,23 @@ interface RegressionItem {
   prevDate: string;
 }
 
-interface HeatmapRow {
-  testKey: string;
-  testLabel: string;
-  statuses: CellStatus[];
-  totalFailures: number;
+interface FolderLeafTest {
+  title: string;
+  status: CellStatus;
+  errorMessage?: string;
+}
+
+interface FolderTreeNode {
+  name: string;
+  fullPath: string;
+  children?: FolderTreeNode[];
+  size?: number;
+  total: number;
+  failed: number;
+  passed: number;
+  skipped: number;
+  failRate: number;
+  tests?: FolderLeafTest[];
 }
 
 interface FlakyStat {
@@ -90,22 +98,6 @@ interface ErrorEvoEntry {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const CELL_STATUS_COLORS: Record<CellStatus, string> = {
-  passed: '#10b981',
-  failed: '#ef4444',
-  flaky: '#f59e0b',
-  skipped: '#cbd5e1',
-  missing: '#e2e8f0',
-};
-
-const CELL_STATUS_LABELS: Record<CellStatus, string> = {
-  passed: 'Passed',
-  failed: 'Failed',
-  flaky: 'Flaky',
-  skipped: 'Skipped',
-  missing: 'Not in run',
-};
-
 const ERROR_COLORS = {
   Assertion: '#f59e0b',
   Timeout: '#f97316',
@@ -132,6 +124,111 @@ function suiteFailColor(rate: number) {
   if (rate >= 70) return '#ef4444';
   if (rate >= 40) return '#f97316';
   return '#f59e0b';
+}
+
+// ── Folder treemap ────────────────────────────────────────────────────────────
+
+function computeFolderStats(tests: FolderLeafTest[]) {
+  const total = tests.length;
+  const failed = tests.filter((t) => t.status === 'failed' || t.status === 'flaky').length;
+  const passed = tests.filter((t) => t.status === 'passed').length;
+  const skipped = tests.filter((t) => t.status === 'skipped').length;
+  return { total, failed, passed, skipped, failRate: total > 0 ? Math.round((failed / total) * 100) : 0 };
+}
+
+function buildFolderNode(
+  tests: (FolderLeafTest & { segments: string[] })[],
+  depth: number,
+  path: string,
+  name: string,
+): FolderTreeNode {
+  const stats = computeFolderStats(tests);
+  const deeper = tests.filter((t) => t.segments.length > depth);
+
+  if (deeper.length === 0) {
+    return {
+      name,
+      fullPath: path,
+      size: stats.total,
+      tests: tests.map(({ title, status, errorMessage }) => ({ title, status, errorMessage })),
+      ...stats,
+    };
+  }
+
+  const groups = new Map<string, (FolderLeafTest & { segments: string[] })[]>();
+  deeper.forEach((t) => {
+    const seg = t.segments[depth];
+    if (!groups.has(seg)) groups.set(seg, []);
+    groups.get(seg)!.push(t);
+  });
+
+  const here = tests.filter((t) => t.segments.length === depth);
+
+  const children = Array.from(groups.entries()).map(([seg, group]) =>
+    buildFolderNode(group, depth + 1, path ? `${path}/${seg}` : seg, seg),
+  );
+
+  if (here.length > 0) {
+    children.push({
+      name: '(other tests)',
+      fullPath: path,
+      size: here.length,
+      tests: here.map(({ title, status, errorMessage }) => ({ title, status, errorMessage })),
+      ...computeFolderStats(here),
+    });
+  }
+
+  return { name, fullPath: path, children, ...stats };
+}
+
+function buildFolderTree(report: ParsedReport | undefined): FolderTreeNode[] {
+  if (!report) return [];
+  const tests = flattenTests(report.suites);
+  if (tests.length === 0) return [];
+
+  const withSegments = tests.map((t) => {
+    const normalized = t.file.replace(/\\/g, '/').replace(/^\.?\//, '');
+    const parts = normalized.split('/').filter(Boolean);
+    parts.pop(); // drop the filename, keep directory segments only
+    return {
+      title: t.title,
+      status: t.status as CellStatus,
+      errorMessage: t.error?.message,
+      segments: parts,
+    };
+  });
+
+  // strip directory segments shared by every test so the treemap starts at the first branch
+  let commonDepth = 0;
+  const maxCommon = Math.min(...withSegments.map((t) => t.segments.length));
+  outer: for (let i = 0; i < maxCommon; i++) {
+    const seg = withSegments[0].segments[i];
+    for (const t of withSegments) {
+      if (t.segments[i] !== seg) break outer;
+    }
+    commonDepth = i + 1;
+  }
+  const trimmed = withSegments.map((t) => ({ ...t, segments: t.segments.slice(commonDepth) }));
+
+  const root = buildFolderNode(trimmed, 0, '', 'All tests');
+  return root.children ?? [];
+}
+
+function folderColor(failRate: number, failed: number): string {
+  if (failed === 0) return '#10b981'; // reserved status green — perfectly healthy folder
+  const t = Math.min(1, Math.max(0, failRate / 100));
+  const from = [0xfe, 0xca, 0xca]; // red-200
+  const to = [0x7f, 0x1d, 0x1d]; // red-900
+  const rgb = from.map((c, i) => Math.round(c + (to[i] - c) * t));
+  return `#${rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function folderTextColor(bgHex: string): string {
+  const r = parseInt(bgHex.slice(1, 3), 16);
+  const g = parseInt(bgHex.slice(3, 5), 16);
+  const b = parseInt(bgHex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? '#1e293b' : '#ffffff';
 }
 
 // ── Data processing ───────────────────────────────────────────────────────────
@@ -172,18 +269,11 @@ function buildPatterns(reports: ParsedReport[]) {
     failCounts.set(key, n);
   });
 
-  // ── Heatmap (top 15 failing, last 10 runs) ──────────────────────────────────
-  const heatReports = sorted.slice(-10);
-  const heatmapRows: HeatmapRow[] = Array.from(testMap.entries())
-    .map(([key, v]) => ({
-      testKey: key,
-      testLabel: trunc(v.label, 48),
-      statuses: heatReports.map((r) => v.byReport.get(r.id) ?? 'missing'),
-      totalFailures: failCounts.get(key) ?? 0,
-    }))
-    .filter((r) => r.totalFailures > 0)
-    .sort((a, b) => b.totalFailures - a.totalFailures)
-    .slice(0, 15);
+  const hasFailingTests = Array.from(failCounts.values()).some((n) => n > 0);
+
+  // ── Failures by folder (latest run) ─────────────────────────────────────────
+  const latestReport = sorted[sorted.length - 1];
+  const folderTree = buildFolderTree(latestReport);
 
   // ── Flakiness (tests that change status across runs) ────────────────────────
   const flakyStats: FlakyStat[] = Array.from(testMap.entries())
@@ -263,10 +353,6 @@ function buildPatterns(reports: ParsedReport[]) {
 
   const totalErrors = (e: ErrorEvoEntry) =>
     e.Assertion + e.Timeout + e.Network + e.Element + e.Runtime + e.Application;
-  const errorTrend =
-    sorted.length >= 2
-      ? totalErrors(errorEvolution[errorEvolution.length - 1]) - totalErrors(errorEvolution[0])
-      : 0;
 
   // ── Regression detection (passed in previous run → failed in latest run) ────
   const dateMap = new Map<string, ParsedReport[]>();
@@ -328,16 +414,14 @@ function buildPatterns(reports: ParsedReport[]) {
   }
 
   return {
-    heatReports,
-    heatmapRows,
+    folderTree,
+    latestReport,
+    hasFailingTests,
     flakyStats,
     suiteHealth,
     errorEvolution,
     consistentlyFailing,
     flakyCount: flakyStats.length,
-    worstSuite: suiteHealth[0]?.suiteName,
-    worstSuiteRate: suiteHealth[0]?.failRate,
-    errorTrend,
     hasErrors: errorEvolution.some((e) => totalErrors(e) > 0),
     regressions,
     regressionLatestDate,
@@ -345,249 +429,228 @@ function buildPatterns(reports: ParsedReport[]) {
   };
 }
 
-// ── Failure Heatmap ───────────────────────────────────────────────────────────
+// ── Failures by Folder (treemap) ─────────────────────────────────────────────
 
-const CELL_STATUS_BG: Record<CellStatus, string> = {
-  passed: 'rgba(16,185,129,0.15)',
-  failed: 'rgba(239,68,68,0.15)',
-  flaky: 'rgba(245,158,11,0.15)',
-  skipped: 'rgba(51,65,85,0.15)',
-  missing: 'transparent',
-};
+function TreemapTile(props: Record<string, any>) {
+  const { x, y, width, height, name, children, failRate, failed, total, depth } = props;
+  if (x == null || width <= 0 || height <= 0) return null;
 
-function HeatCell({
-  status,
-  label,
-  runName,
-}: {
-  status: CellStatus;
-  label: string;
-  runName: string;
-}) {
-  const [hovered, setHovered] = useState(false);
+  const isBranch = !!(children && children.length);
+  const isRoot = depth === 0;
+  const fill = isRoot ? 'transparent' : folderColor(failRate ?? 0, failed ?? 0);
+  const txt = folderTextColor(fill === 'transparent' ? '#ffffff' : fill);
+  const pad = 10;
+  const showChevron = isBranch && !isRoot && width > 34 && height > 26;
+  const showName = !isRoot && width > 44 && height > 24;
+  const showStats = !isRoot && width > 84 && height > 46;
 
-  const isMissing = status === 'missing';
-  const color = CELL_STATUS_COLORS[status];
+  const maxChars = Math.max(3, Math.floor((width - pad * 2 - (showChevron ? 16 : 0)) / 6.3));
+  const label = trunc(name ?? '', maxChars);
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        width: 36,
-        height: 36,
-        borderRadius: 6,
-        flexShrink: 0,
-        cursor: 'default',
-        position: 'relative',
-        backgroundColor: hovered && !isMissing ? CELL_STATUS_BG[status] : 'transparent',
-        border: isMissing
-          ? '1.5px dashed rgba(100,116,139,0.18)'
-          : `2px solid ${hovered ? color : color + '55'}`,
-        transition: 'border-color 0.15s, background 0.15s, transform 0.1s',
-        transform: hovered && !isMissing ? 'scale(1.12)' : 'scale(1)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      title={isMissing ? `Not in this run — ${runName}` : `${label}\n${CELL_STATUS_LABELS[status]} — ${runName}`}
-    >
-      {!isMissing && (
-        <div
-          style={{
-            width: 14,
-            height: 14,
-            borderRadius: '50%',
-            backgroundColor: color,
-            opacity: 0.9,
-          }}
+    <g style={{ cursor: isRoot ? 'default' : 'pointer' }}>
+      {!isRoot && (
+        <rect
+          x={x + 1.5}
+          y={y + 1.5}
+          width={Math.max(0, width - 3)}
+          height={Math.max(0, height - 3)}
+          rx={7}
+          fill={fill}
+          stroke="#ffffff"
+          strokeWidth={2}
         />
+      )}
+      {showName && (
+        <text
+          x={x + pad}
+          y={y + (showStats ? 23 : height / 2 + 4)}
+          fontSize={12.5}
+          fontWeight={600}
+          fill={txt}
+        >
+          {label}
+        </text>
+      )}
+      {showStats && (
+        <text x={x + pad} y={y + height - 12} fontSize={11} fill={txt} opacity={0.9}>
+          {failed > 0 ? `${failed}/${total} failing · ${failRate}%` : `${total} passing`}
+        </text>
+      )}
+      {showChevron && (
+        <polyline
+          points={`${x + width - 18},${y + height / 2 - 5} ${x + width - 11},${y + height / 2} ${x + width - 18},${y + height / 2 + 5}`}
+          fill="none"
+          stroke={txt}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.75}
+        />
+      )}
+    </g>
+  );
+}
+
+function FolderTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: FolderTreeNode & { children?: unknown[] } }> }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  if (!d || d.total == null) return null;
+  const color = folderColor(d.failRate, d.failed);
+  return (
+    <div className="rounded-xl border border-slate-400 bg-slate-200/95 p-3 shadow-2xl text-xs max-w-[220px]">
+      <p className="font-semibold text-slate-900 mb-2 break-all">{d.name}</p>
+      <div className="space-y-1">
+        <div className="flex justify-between gap-4">
+          <span className="text-slate-600">Fail rate</span>
+          <span className="font-bold" style={{ color }}>{d.failRate}%</span>
+        </div>
+        <div className="flex justify-between gap-4">
+          <span className="text-red-600">Failing</span>
+          <span className="text-red-600 font-medium">{d.failed}</span>
+        </div>
+        <div className="flex justify-between gap-4">
+          <span className="text-slate-600">Total tests</span>
+          <span className="text-slate-700">{d.total}</span>
+        </div>
+      </div>
+      <p className="text-slate-400 mt-2 pt-2 border-t border-slate-400/40">
+        {d.children && d.children.length > 0 ? 'Click to drill in' : 'Click to see failing tests'}
+      </p>
+    </div>
+  );
+}
+
+function FolderDetailPanel({ node, onClose }: { node: FolderTreeNode; onClose: () => void }) {
+  const failing = (node.tests ?? []).filter((t) => t.status === 'failed' || t.status === 'flaky');
+
+  return (
+    <div className="mt-5 pt-5 border-t border-slate-200">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-900" title={node.fullPath || node.name}>
+            {node.fullPath || node.name}
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">{node.failed} failing of {node.total} tests</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
+          title="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      {failing.length === 0 ? (
+        <p className="text-sm text-emerald-600 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4" /> All tests passing in this folder.
+        </p>
+      ) : (
+        <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+          {failing.map((t, i) => (
+            <div key={i} className="flex items-start gap-2 rounded-lg px-3 py-2 bg-red-50 border border-red-100">
+              <XCircle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm text-slate-800 truncate" title={t.title}>{t.title}</p>
+                {t.errorMessage && (
+                  <p
+                    className="text-xs text-red-600/80 mt-0.5 truncate"
+                    style={{ fontFamily: 'ui-monospace, monospace' }}
+                    title={t.errorMessage}
+                  >
+                    {t.errorMessage.split('\n')[0]}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-function FailureHeatmap({
-  rows,
-  reports,
+function FailuresByFoldersTreemap({
+  folderTree,
+  latestReport,
 }: {
-  rows: HeatmapRow[];
-  reports: ParsedReport[];
+  folderTree: FolderTreeNode[];
+  latestReport?: ParsedReport;
 }) {
-  const LABEL_W = 240;
-  const CELL_W = 36;
-  const GAP = 6;
+  const [selectedLeaf, setSelectedLeaf] = useState<FolderTreeNode | null>(null);
 
-  if (rows.length === 0) {
+  if (folderTree.length === 0) {
     return (
       <p className="text-center text-sm text-slate-500 py-6">
-        No failures detected across these runs.
+        No test files found in the latest run.
       </p>
     );
   }
 
+  const height = Math.min(480, Math.max(300, folderTree.length * 22 + 260));
+
   return (
-    <div className="overflow-x-auto">
-      <div style={{ minWidth: LABEL_W + reports.length * (CELL_W + GAP) + 160 }}>
-
-        {/* Column headers */}
-        <div className="flex items-end mb-4" style={{ paddingLeft: LABEL_W + 12 }}>
-          {reports.map((r, idx) => (
-            <div
-              key={r.id}
-              style={{ width: CELL_W + GAP, flexShrink: 0 }}
-              className="flex flex-col items-center gap-1"
-              title={r.name}
-            >
-              <span
-                className="text-slate-500 font-mono tabular-nums"
-                style={{ fontSize: 9, writingMode: 'vertical-rl', transform: 'rotate(180deg)', lineHeight: 1, whiteSpace: 'nowrap' }}
-              >
-                {reportShortDate(r)}
-              </span>
-              <div
-                className="rounded-sm"
-                style={{ width: 2, height: 8, backgroundColor: idx === reports.length - 1 ? '#64748b' : '#cbd5e1' }}
-              />
-            </div>
-          ))}
-          <div className="ml-3 text-xs text-slate-400 whitespace-nowrap self-end mb-1">failures</div>
+    <div>
+      {/* Legend */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <span className="text-xs text-slate-500 shrink-0">Fail rate</span>
+        <div className="w-full max-w-[220px]">
+          <div className="flex justify-between text-[10px] text-slate-400 mb-1 font-mono">
+            <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
+          </div>
+          <div
+            className="h-2 rounded-full"
+            style={{ background: 'linear-gradient(to right, #7f1d1d, #b91c1c, #ef4444, #f87171, #fecaca)' }}
+          />
         </div>
-
-        {/* Rows */}
-        <div className="space-y-2">
-          {rows.map((row, rowIdx) => {
-            const failRate = Math.round((row.totalFailures / reports.length) * 100);
-            const isCritical = failRate >= 80;
-            const isHigh = failRate >= 50;
-
-            return (
-              <div
-                key={row.testKey}
-                className="flex items-center rounded-lg px-3 py-1.5 group transition-colors"
-                style={{
-                  backgroundColor: rowIdx % 2 === 0 ? 'rgba(248,250,252,0.8)' : 'rgba(241,245,249,0.6)',
-                }}
-              >
-                {/* Row index */}
-                <span
-                  className="text-slate-400 font-mono tabular-nums text-xs shrink-0 select-none"
-                  style={{ width: 24 }}
-                >
-                  {rowIdx + 1}
-                </span>
-
-                {/* Test label */}
-                <div
-                  className="shrink-0 pr-3"
-                  style={{ width: LABEL_W - 24 }}
-                >
-                  <div
-                    className="text-sm font-medium truncate group-hover:text-slate-900 transition-colors"
-                    style={{ color: isCritical ? '#dc2626' : isHigh ? '#ea580c' : '#334155' }}
-                    title={row.testKey}
-                  >
-                    {row.testLabel}
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <div className="h-1 rounded-full overflow-hidden" style={{ width: 60, backgroundColor: '#e2e8f0' }}>
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${failRate}%`,
-                          backgroundColor: isCritical ? '#ef4444' : isHigh ? '#f97316' : '#f59e0b',
-                        }}
-                      />
-                    </div>
-                    <span
-                      className="text-xs font-semibold tabular-nums"
-                      style={{ color: isCritical ? '#ef4444' : isHigh ? '#f97316' : '#f59e0b', fontSize: 10 }}
-                    >
-                      {failRate}%
-                    </span>
-                  </div>
-                </div>
-
-                {/* Status cells */}
-                <div className="flex items-center" style={{ gap: GAP }}>
-                  {row.statuses.map((status, i) => (
-                    <HeatCell
-                      key={i}
-                      status={status}
-                      label={row.testKey}
-                      runName={reports[i]?.name ?? ''}
-                    />
-                  ))}
-                </div>
-
-                {/* Failure count badge */}
-                <div className="ml-4 shrink-0 flex items-center gap-1.5">
-                  <div
-                    className="flex items-center justify-center rounded-md text-xs font-bold tabular-nums px-2 py-0.5"
-                    style={{
-                      minWidth: 36,
-                      backgroundColor: isCritical
-                        ? 'rgba(239,68,68,0.15)'
-                        : isHigh
-                        ? 'rgba(249,115,22,0.15)'
-                        : 'rgba(245,158,11,0.12)',
-                      color: isCritical ? '#dc2626' : isHigh ? '#ea580c' : '#d97706',
-                      border: `1px solid ${isCritical ? 'rgba(239,68,68,0.3)' : isHigh ? 'rgba(249,115,22,0.3)' : 'rgba(245,158,11,0.25)'}`,
-                    }}
-                  >
-                    {row.totalFailures}
-                  </div>
-                  <span className="text-slate-400 text-xs">fails</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Legend */}
-        <div className="flex items-center gap-4 mt-6 pt-4 border-t border-slate-300/40 flex-wrap">
-          <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">Legend</span>
-          {(['passed', 'failed', 'flaky', 'skipped', 'missing'] as CellStatus[]).map((s) => (
-            <span key={s} className="flex items-center gap-2 text-xs text-slate-600">
-              {s === 'missing' ? (
-                <span
-                  style={{
-                    display: 'inline-block',
-                    width: 16,
-                    height: 16,
-                    borderRadius: 4,
-                    border: '1.5px dashed rgba(100,116,139,0.35)',
-                  }}
-                />
-              ) : (
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 16,
-                    height: 16,
-                    borderRadius: 4,
-                    border: `2px solid ${CELL_STATUS_COLORS[s]}55`,
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: 7,
-                      height: 7,
-                      borderRadius: '50%',
-                      backgroundColor: CELL_STATUS_COLORS[s],
-                    }}
-                  />
-                </span>
-              )}
-              <span className="text-slate-700">{CELL_STATUS_LABELS[s]}</span>
-            </span>
-          ))}
-          <span className="ml-auto text-xs text-slate-400">Hover a cell for details · Showing top {rows.length} failing tests across last {reports.length} runs</span>
-        </div>
+        <span className="flex items-center gap-1.5 text-xs text-slate-500 ml-1">
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#10b981' }} />
+          No failures
+        </span>
+        {latestReport && (
+          <span className="ml-auto text-xs text-slate-400 truncate max-w-[240px]" title={latestReport.name}>
+            Latest run · {latestReport.name}
+          </span>
+        )}
       </div>
+
+      <div className="treemap-breadcrumb">
+        <style>{`
+          .treemap-breadcrumb .recharts-treemap-nest-index-wrapper {
+            display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+            margin-top: 10px !important; text-align: left !important;
+          }
+          .treemap-breadcrumb .recharts-treemap-nest-index-box {
+            background: #f1f5f9 !important; color: #475569 !important;
+            padding: 3px 10px !important; border-radius: 9999px !important;
+            font-size: 11px !important; font-weight: 500 !important;
+            margin-right: 0 !important; transition: background 0.15s;
+          }
+          .treemap-breadcrumb .recharts-treemap-nest-index-box:hover { background: #e2e8f0 !important; }
+          .treemap-breadcrumb .recharts-treemap-nest-index-box:last-child {
+            background: #1e293b !important; color: #fff !important; cursor: default;
+          }
+        `}</style>
+        <ResponsiveContainer width="100%" height={height}>
+          <Treemap
+            data={folderTree}
+            dataKey="size"
+            nameKey="name"
+            type="nest"
+            aspectRatio={4 / 3}
+            isAnimationActive={false}
+            content={<TreemapTile />}
+            nestIndexContent={(item: any) => item?.name ?? 'All folders'}
+            onClick={(node: any) => {
+              setSelectedLeaf(!node.children || !node.children.length ? node : null);
+            }}
+          >
+            <RechartsTooltip content={<FolderTooltip />} />
+          </Treemap>
+        </ResponsiveContainer>
+      </div>
+
+      {selectedLeaf && <FolderDetailPanel node={selectedLeaf} onClose={() => setSelectedLeaf(null)} />}
     </div>
   );
 }
@@ -751,7 +814,7 @@ function RegressionSection({
   return (
     <Card>
       <CardHeader
-        title="New Regressions"
+        title="Newly Broken Tests"
         subtitle={
           prevDate && latestDate
             ? `Tests that passed on ${prevDate} but failed on ${latestDate}`
@@ -868,7 +931,7 @@ export function FailurePatternsPage() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-slate-900 mb-2">No reports yet</h2>
           <p className="text-slate-600 max-w-sm">
-            Upload Playwright HTML reports to start analyzing failure patterns.
+            Upload Playwright JUnit XML reports to start analyzing failure patterns.
           </p>
         </div>
         <Button size="lg" icon={<Upload className="h-5 w-5" />} onClick={() => setShowUploadModal(true)}>
@@ -890,15 +953,13 @@ export function FailurePatternsPage() {
   if (!data) return null;
 
   const {
-    heatReports,
-    heatmapRows,
+    folderTree,
+    latestReport,
+    hasFailingTests,
     suiteHealth,
     errorEvolution,
     consistentlyFailing,
     flakyCount,
-    worstSuite,
-    worstSuiteRate,
-    errorTrend,
     hasErrors,
     regressions,
     regressionLatestDate,
@@ -933,9 +994,9 @@ export function FailurePatternsPage() {
       )}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <MetricCard
-          label="New Regressions"
+          label="Newly Broken Tests"
           value={regressions.length}
           sub={regressionPrevDate ? `since ${regressionPrevDate}` : 'need 2+ date groups'}
           accent={regressions.length > 0 ? 'text-amber-600' : 'text-emerald-600'}
@@ -955,32 +1016,6 @@ export function FailurePatternsPage() {
           accent="text-amber-600"
           icon={<RefreshCw className="h-5 w-5" />}
         />
-        <MetricCard
-          label="Worst Suite"
-          value={worstSuite ?? '—'}
-          valueTitle={worstSuite}
-          valueClassName="text-sm font-semibold break-all leading-snug"
-          sub={worstSuiteRate != null ? `${worstSuiteRate}% fail rate` : undefined}
-          accent="text-orange-600"
-          icon={<FolderOpen className="h-5 w-5" />}
-        />
-        <MetricCard
-          label="Error Trend"
-          value={errorTrend > 1 ? 'Worsening' : errorTrend < -1 ? 'Improving' : 'Stable'}
-          sub="first vs latest run"
-          accent={
-            errorTrend > 1 ? 'text-red-600' : errorTrend < -1 ? 'text-emerald-600' : 'text-slate-600'
-          }
-          icon={
-            errorTrend > 1 ? (
-              <TrendingDown className="h-5 w-5" />
-            ) : errorTrend < -1 ? (
-              <TrendingUp className="h-5 w-5" />
-            ) : (
-              <Minus className="h-5 w-5" />
-            )
-          }
-        />
       </div>
 
       {/* Regression Detector */}
@@ -990,13 +1025,13 @@ export function FailurePatternsPage() {
         latestDate={regressionLatestDate}
       />
 
-      {/* Failure Heatmap */}
+      {/* Failures by Folder */}
       <Card>
         <CardHeader
-          title="Test Failure Heatmap"
-          subtitle="Top failing tests across runs — each column is one report, hover a cell to see details"
+          title="Failures by Folder"
+          subtitle="Latest run broken down by test folder — size is test volume, color is fail rate. Click a tile to drill in."
         />
-        <FailureHeatmap rows={heatmapRows} reports={heatReports} />
+        <FailuresByFoldersTreemap folderTree={folderTree} latestReport={latestReport} />
       </Card>
 
       {/* Suite Health + Error Evolution */}
@@ -1052,20 +1087,21 @@ export function FailurePatternsPage() {
 
         <Card>
           <CardHeader
-            title="Error Category Evolution"
-            subtitle="How failure types changed across runs"
+            title="Failure Types by Run"
+            subtitle="How many failures of each type occurred in every report"
           />
           {!hasErrors || errorEvolution.length < 2 ? (
             <p className="text-center text-sm text-slate-500 py-6">
               {errorEvolution.length < 2
-                ? 'Upload at least 2 reports to show evolution.'
+                ? 'Upload at least 2 reports to compare failure types.'
                 : 'No categorised errors found.'}
             </p>
           ) : (
             <ResponsiveContainer width="100%" height={suiteChartH}>
-              <AreaChart
+              <BarChart
                 data={errorEvolution}
                 margin={{ top: 8, right: 16, left: -12, bottom: 8 }}
+                barCategoryGap="30%"
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis
@@ -1080,7 +1116,7 @@ export function FailurePatternsPage() {
                   tickLine={false}
                   allowDecimals={false}
                 />
-                <RechartsTooltip content={<ErrorEvoTooltip />} />
+                <RechartsTooltip content={<ErrorEvoTooltip />} cursor={{ fill: 'rgba(15,23,42,0.03)' }} />
                 <Legend
                   iconType="circle"
                   iconSize={8}
@@ -1088,25 +1124,25 @@ export function FailurePatternsPage() {
                     <span className="text-slate-700 text-xs">{v}</span>
                   )}
                 />
-                {(Object.keys(ERROR_COLORS) as (keyof typeof ERROR_COLORS)[]).map((key) => (
-                  <Area
+                {(Object.keys(ERROR_COLORS) as (keyof typeof ERROR_COLORS)[]).map((key, i, arr) => (
+                  <Bar
                     key={key}
-                    type="monotone"
                     dataKey={key}
-                    stackId="1"
-                    stroke={ERROR_COLORS[key]}
+                    stackId="errors"
                     fill={ERROR_COLORS[key]}
-                    fillOpacity={0.28}
+                    fillOpacity={0.85}
+                    maxBarSize={48}
+                    radius={i === arr.length - 1 ? [4, 4, 0, 0] : undefined}
                   />
                 ))}
-              </AreaChart>
+              </BarChart>
             </ResponsiveContainer>
           )}
         </Card>
       </div>
 
       {/* Empty state when everything passes */}
-      {heatmapRows.length === 0 && suiteHealth.length === 0 && flakyCount === 0 && (
+      {!hasFailingTests && suiteHealth.length === 0 && flakyCount === 0 && (
         <Card className="text-center py-12">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 mx-auto mb-4">
             <BarChart2 className="h-8 w-8 text-emerald-600" />

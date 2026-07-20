@@ -1,19 +1,17 @@
 {
   "name": "playwright-analyzer-backend",
   "version": "1.0.0",
-  "description": "Backend for Playwright HTML Report Analyzer",
+  "description": "Backend for Playwright XML Report Analyzer",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@types/adm-zip": "^0.5.8",
-    "adm-zip": "^0.5.17",
-    "cheerio": "^1.0.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
+    "fast-xml-parser": "^4.5.0",
     "helmet": "^7.1.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",

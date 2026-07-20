@@ -4,7 +4,7 @@
 
 ## Objective
 
-> **Transform raw Playwright HTML test reports into actionable intelligence** — enabling QA teams to detect failures faster, track quality trends over time, and make data-driven decisions about test suite health.
+> **Transform raw Playwright JUnit XML test reports into actionable intelligence** — enabling QA teams to detect failures faster, track quality trends over time, and make data-driven decisions about test suite health.
 
 ---
 
@@ -12,7 +12,7 @@
 
 | # | Aim | How |
 |---|-----|-----|
-| 1 | **Ingest** any Playwright HTML report version | 4-strategy parser handles PW 1.22 → 1.44+ |
+| 1 | **Ingest** Playwright JUnit XML reports | `fast-xml-parser` maps `<testsuites>/<testsuite>/<testcase>` directly |
 | 2 | **Categorize** failures by root cause | 6 error types: assertion, timeout, network, element-not-found, runtime, unknown |
 | 3 | **Visualize** test results instantly | Donut, bar, and line charts via Recharts |
 | 4 | **Track trends** across multiple uploads | Pass-rate history, regression detection |
@@ -52,8 +52,8 @@
 │                               │                                     │
 │  ┌────────────────────────────▼──────────────────────────────────┐ │
 │  │           Parser Service (parser.service.ts)                  │ │
-│  │  Strategy 1: ZIP extract  │  Strategy 3: Direct JSON          │ │
-│  │  Strategy 2: Base64+Gzip  │  Strategy 4: Data Attributes      │ │
+│  │  fast-xml-parser → <testsuites>/<testsuite>/<testcase>        │ │
+│  │  → mapTestSuite() / mapTestCase() → app-level model           │ │
 │  └────────────────────────────┬──────────────────────────────────┘ │
 │                               │                                     │
 │  ┌────────────────────────────▼──────────────────────────────────┐ │
@@ -71,16 +71,16 @@
                         ╔══════════════════════════════╗
                         ║  PLAYWRIGHT TEST SUITE RUNS  ║
                         ║  npx playwright test         ║
+                        ║  --reporter=junit             ║
                         ╚══════════════════╦═══════════╝
                                            ║ generates
                                            ▼
                         ╔══════════════════════════════╗
-                        ║   playwright-report.html     ║
-                        ║   (self-contained HTML file) ║
-                        ║   may contain:               ║
-                        ║   • Base64+ZIP (PW ≥ 1.44)  ║
-                        ║   • Base64+Gzip (PW ≥ 1.22)  ║
-                        ║   • Inline JSON (older PW)   ║
+                        ║       results.xml            ║
+                        ║   <testsuites>                ║
+                        ║     <testsuite>                ║
+                        ║       <testcase>                ║
+                        ║         <failure>/<skipped>     ║
                         ╚══════════════════╦═══════════╝
                                            ║ user uploads via browser
                                            ▼
@@ -88,7 +88,7 @@
 ║  STEP 1 — UPLOAD (UploadPage.tsx)                                   ║
 ║                                                                      ║
 ║  ┌─────────────┐    drag-drop / click    ┌──────────────────────┐   ║
-║  │    User     │ ──────────────────────▶ │  File Input (.html)  │   ║
+║  │    User     │ ──────────────────────▶ │  File Input (.xml)   │   ║
 ║  └─────────────┘                         └──────────┬───────────┘   ║
 ║                                                     │               ║
 ║                               FormData(file)        │               ║
@@ -102,37 +102,27 @@
 ╔══════════════════════════════════════════════════════════════════════╗
 ║  STEP 2 — PARSE (parser.service.ts)                                 ║
 ║                                                                      ║
-║  HTML Buffer                                                         ║
+║  XML Buffer                                                          ║
 ║       │                                                              ║
-║       ├──▶ Strategy 1: <script id="playwrightReportBase64">         ║
-║       │    → AdmZip → report.json + test JSONs          (PW≥1.44)  ║
+║       ▼  fast-xml-parser (XMLParser.parse)                           ║
+║  JUnitDocument { testsuites: { testsuite: [...] } }                  ║
 ║       │                                                              ║
-║       ├──▶ Strategy 2: window.playwrightReportBase64                ║
-║       │    → gunzip / inflateRaw → JSON                 (PW≥1.22)  ║
-║       │                                                              ║
-║       ├──▶ Strategy 3: __PLAYWRIGHT_REPORT__ / __pw_report          ║
-║       │    → direct JSON parse                          (older PW)  ║
-║       │                                                              ║
-║       └──▶ Strategy 4: #reactData / [data-playwright-report]        ║
-║            → data attribute parse                       (fallback)  ║
-║                                                                      ║
-║  PlaywrightJsonReport (raw)                                          ║
-║       │                                                              ║
-║       ▼  mapSuites() — recursive                                     ║
+║       ▼  mapTestSuite() — one per <testsuite> (usually per spec file)║
 ║  TestSuite[]                                                         ║
 ║       │                                                              ║
-║       ├──▶ mapTests() → TestResult[]                                 ║
-║       │       ├── status: passed/failed/skipped/flaky               ║
-║       │       ├── duration (ms)                                      ║
-║       │       ├── errorMessage                                       ║
-║       │       └── stackTrace                                         ║
+║       ├──▶ mapTestCase() → TestResult[]                              ║
+║       │       ├── status: <failure>/<error> → failed                ║
+║       │       │           <skipped> → skipped, else → passed        ║
+║       │       ├── duration: @_time (sec) × 1000 → ms                ║
+║       │       ├── errorMessage: failure @_message / text            ║
+║       │       └── stackTrace: failure element text                  ║
 ║       │                                                              ║
 ║       └──▶ categorizeError() → ErrorCategory                        ║
 ║               assertion / timeout / network /                        ║
-║               element-not-found / runtime / unknown                  ║
+║               element-not-found / runtime / application              ║
 ║                                                                      ║
 ║  buildErrorGroups() → ErrorGroup[]                                   ║
-║  computeStats() → { total, passed, failed, skipped, flaky, duration }║
+║  stats from root @_tests/@_failures/@_skipped/@_time attributes      ║
 ║                                                                      ║
 ║  → ParsedReport { id, name, uploadedAt, stats, suites, errorGroups }║
 ╚══════════════════════════════════════════════════════════════════════╝
@@ -176,7 +166,7 @@
 ```
                          ┌─────────────────┐
                          │   / (Upload)    │
-                         │  Drag-drop HTML │
+                         │  Drag-drop XML  │
                          └────────┬────────┘
                                   │ upload success
                                   ▼
@@ -233,49 +223,44 @@
 
 ---
 
-## Parser Strategy Decision Tree
+## Parser Mapping Flow
 
 ```
-                   Playwright HTML Report received
+                   Playwright JUnit XML report received
                                │
                                ▼
-              ┌────────────────────────────────┐
-              │  Does <script id=              │
-              │  "playwrightReportBase64">      │
-              │  exist?                        │
-              └────────┬───────────────────────┘
-              YES ─────┘          └───── NO
-               │                          │
-               ▼                          ▼
-   ┌────────────────────┐    ┌────────────────────────────┐
-   │  STRATEGY 1 (ZIP)  │    │  window.playwright         │
-   │  Base64 decode     │    │  ReportBase64 present?     │
-   │  → AdmZip extract  │    └────────┬───────────────────┘
-   │  → report.json     │    YES ─────┘       └──── NO
-   │  → test JSONs      │     │                       │
-   │  ✓ PW ≥ 1.44       │     ▼                       ▼
-   └────────────────────┘  ┌────────────────┐  ┌─────────────────────┐
-                           │ STRATEGY 2     │  │  __PLAYWRIGHT_      │
-                           │ Base64+Gzip    │  │  REPORT__ or        │
-                           │ gunzip →       │  │  __pw_report ?      │
-                           │ inflateRaw →   │  └────────┬────────────┘
-                           │ JSON           │  YES ─────┘     └─── NO
-                           │ ✓ PW ≥ 1.22    │   │                  │
-                           └────────────────┘   ▼                  ▼
-                                          ┌──────────┐   ┌─────────────────┐
-                                          │STRATEGY 3│   │  STRATEGY 4     │
-                                          │Direct    │   │  Data Attrs     │
-                                          │JSON from │   │  #reactData     │
-                                          │script tag│   │  #reportData    │
-                                          │✓ older PW│   │  [data-pw-rpt]  │
-                                          └──────────┘   └─────────────────┘
-                                                │                 │
-                                                └────────┬────────┘
-                                                         ▼
-                                              ┌─────────────────────┐
-                                              │  PlaywrightJson     │
-                                              │  Report (raw data)  │
-                                              └─────────────────────┘
+              ┌──────────────────────────────────────┐
+              │  XMLParser.parse(xml) → JUnitDocument │
+              │  (fast-xml-parser, attrs as @_name)   │
+              └────────────────────┬───────────────────┘
+                                   ▼
+              ┌──────────────────────────────────────┐
+              │  Root: <testsuites> (or bare          │
+              │  <testsuite> for single-suite files)  │
+              └────────────────────┬───────────────────┘
+                                   ▼
+              ┌──────────────────────────────────────┐
+              │  For each <testsuite>:                │
+              │  → mapTestSuite()                     │
+              │    title = @_name, file from testcases│
+              └────────────────────┬───────────────────┘
+                                   ▼
+              ┌──────────────────────────────────────┐
+              │  For each <testcase>:                 │
+              │  → mapTestCase()                      │
+              │  status:                              │
+              │   <failure>/<error> present → failed  │
+              │   <skipped> present         → skipped │
+              │   else                      → passed  │
+              │  duration = @_time (sec) × 1000        │
+              │  error = failure @_message / #text    │
+              └────────────────────┬───────────────────┘
+                                   ▼
+                        ┌─────────────────────┐
+                        │  TestSuite[] with    │
+                        │  TestResult[] (app-  │
+                        │  level model)        │
+                        └─────────────────────┘
 ```
 
 ---
@@ -307,7 +292,7 @@
   │   ──────────────────────────────────────▶ runtime       │
   │                                                         │
   │  (no match)                                             │
-  │   ──────────────────────────────────────▶ unknown       │
+  │   ──────────────────────────────────────▶ application   │
   └─────────────────────────────────────────────────────────┘
             │
             ▼
@@ -398,10 +383,10 @@ App.tsx (React Router)
 │  │    4.18    │  │  (dev)   │  │  1.4   │  │     7.1      │    │
 │  └────────────┘  └──────────┘  └────────┘  └──────────────┘    │
 │                                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌────────┐  ┌──────────────┐      │
-│  │ Cheerio  │  │  AdmZip  │  │  UUID  │  │   Morgan     │      │
-│  │   1.0    │  │   0.5    │  │   9.0  │  │    1.10      │      │
-│  └──────────┘  └──────────┘  └────────┘  └──────────────┘      │
+│  ┌──────────────────┐  ┌────────┐  ┌──────────────┐             │
+│  │ fast-xml-parser  │  │  UUID  │  │   Morgan     │             │
+│  │      4.5         │  │   9.0  │  │    1.10      │             │
+│  └──────────────────┘  └────────┘  └──────────────┘             │
 │                                                                  │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │  In-Memory Repository  (→ pluggable: PostgreSQL/MongoDB)   │ │
@@ -446,14 +431,14 @@ All Stored Reports
 QA Engineer                         System
 
     │  "I ran my Playwright tests"      │
-    │  Has: playwright-report.html      │
+    │  Has: results.xml (JUnit)         │
     │                                   │
     ├──── Opens localhost:5173 ────────▶│
     │                                   │ UploadPage renders
     │◀─── Drag-drop zone appears ───────┤
     │                                   │
-    ├──── Drops .html file ────────────▶│
-    │                                   │ Parses HTML (4 strategies)
+    ├──── Drops .xml file ─────────────▶│
+    │                                   │ Parses JUnit XML
     │                                   │ Categorizes errors
     │     Progress bar fills            │ Saves to memory
     │◀─── 201 Created ──────────────────┤
@@ -492,7 +477,7 @@ QA Engineer                         System
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  POST   /api/reports/upload                                      │
-│  Body:  multipart/form-data { file: .html (max 50MB) }          │
+│  Body:  multipart/form-data { file: .xml (max 50MB) }           │
 │  Resp:  201 { id: uuid, name: string, stats: TestStats }        │
 ├──────────────────────────────────────────────────────────────────┤
 │  GET    /api/reports                                             │
@@ -532,12 +517,12 @@ Request arrives
 │ Rate Limit  │────▶ 429 Too Many Requests if exceeded
 └──────┬──────┘
        ▼
-┌─────────────┐     ✓ extension check: .html only
+┌─────────────┐     ✓ extension check: .xml only
 │ File Valid. │────▶ max size: 50 MB
 └──────┬──────┘
        ▼
 ┌─────────────┐     ✓ async errors caught globally
-│   Parser    │────▶ all 4 strategies try/catch
+│   Parser    │────▶ XML parse wrapped in try/catch
 └──────┬──────┘
        ▼
 ┌─────────────┐     ✓ User-friendly error messages
@@ -558,7 +543,7 @@ Request arrives
 #    → Backend:  http://localhost:4000
 #    → Frontend: http://localhost:5173
 
-# 3. Upload a Playwright HTML report and explore!
+# 3. Upload a Playwright JUnit XML report (`--reporter=junit`) and explore!
 ```
 
 ---

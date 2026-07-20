@@ -21,8 +21,8 @@ export function UploadReportModal({ onClose, onUploaded }: UploadReportModalProp
 
   const accept = (f: File) => {
     setError('');
-    if (!f.name.toLowerCase().endsWith('.html')) {
-      setError('Please select a Playwright HTML report file (.html).');
+    if (!f.name.toLowerCase().endsWith('.xml')) {
+      setError('Please select a Playwright JUnit XML report file (.xml).');
       return;
     }
     setFile(f);
@@ -71,7 +71,7 @@ export function UploadReportModal({ onClose, onUploaded }: UploadReportModalProp
         <input
           ref={inputRef}
           type="file"
-          accept=".html"
+          accept=".xml"
           className="hidden"
           onChange={(e) => e.target.files?.[0] && accept(e.target.files[0])}
         />
@@ -105,11 +105,11 @@ export function UploadReportModal({ onClose, onUploaded }: UploadReportModalProp
               <Upload className="h-7 w-7" />
             </div>
             <p className="text-slate-900 font-semibold mb-1">
-              {dragging ? 'Drop it here!' : 'Drop your HTML report here'}
+              {dragging ? 'Drop it here!' : 'Drop your XML report here'}
             </p>
             <p className="text-slate-600 text-sm">or click to browse your files</p>
             <p className="mt-3 text-xs text-slate-400 font-mono">
-              Supports Playwright HTML reports · Max 50 MB
+              Supports Playwright JUnit XML reports · Max 50 MB
             </p>
           </>
         )}

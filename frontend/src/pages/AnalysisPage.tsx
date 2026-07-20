@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -14,18 +14,16 @@ import {
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
 import type { ParsedReport, TestSuite, TestResult } from '../types';
-import { ERROR_CATEGORY_CONFIG, formatDuration, formatDate, flattenTests } from '../utils/helpers';
+import { formatDuration, formatDate, flattenTests } from '../utils/helpers';
 import { exportAnalysisPDF } from '../utils/pdfExport';
 import { StatusDonutChart } from '../components/charts/StatusDonutChart';
 import { SuiteBarChart } from '../components/charts/SuiteBarChart';
-import { ErrorCategoryChart } from '../components/charts/ErrorCategoryChart';
 import { Card, CardHeader } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { ExecutiveSummary } from '../components/analysis/ExecutiveSummary';
-import { SmartRecommendations } from '../components/analysis/SmartRecommendations';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 
@@ -175,7 +173,7 @@ export function AnalysisPage() {
   if (error) return <ErrorState message={error} />;
   if (!report) return null;
 
-  const { stats, suites, errorGroups } = report;
+  const { stats, suites } = report;
 
   return (
     <div className="animate-slide-up space-y-6">
@@ -190,7 +188,7 @@ export function AnalysisPage() {
           All Reports
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-slate-900 truncate">{report.name}</h1>
+          <h1 className="text-2xl font-bold text-slate-900 truncate">Reports by Date</h1>
           <div className="flex items-center gap-4 mt-1 text-xs text-slate-600">
             <span className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" />
@@ -286,38 +284,6 @@ export function AnalysisPage() {
           <SuiteBarChart suites={suites} />
         </Card>
       </div>
-
-      {/* Error breakdown */}
-      {errorGroups.length > 0 && (
-        <Card>
-          <CardHeader
-            title="Failure Breakdown by Category"
-            subtitle="Click a bar to filter tests by error type"
-          />
-          <ErrorCategoryChart errorGroups={errorGroups} reportId={id!} />
-
-          {/* Legend chips */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {errorGroups.map((g) => {
-              const cfg = ERROR_CATEGORY_CONFIG[g.category];
-              return (
-                <Link
-                  key={g.category}
-                  to={`/analysis/${id}/category/failed?error=${g.category}`}
-                  className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-slate-300"
-                  style={{ borderColor: cfg.hex + '50', color: cfg.hex }}
-                >
-                  {cfg.icon} {g.label}
-                  <span className="ml-1 font-bold">{g.count}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {/* Smart recommendations */}
-      <SmartRecommendations report={report} />
 
       {/* Suite list */}
       <Card>

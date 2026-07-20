@@ -23,6 +23,8 @@ export interface TestResult {
   file: string;
   line?: number;
   retries: number;
+  /** Tenant ID parsed out of the test's logged output (e.g. "[INFO] TenantId: 4"), when present. */
+  tenantId?: string;
 }
 
 export interface SuiteStats {
@@ -70,6 +72,8 @@ export interface ParsedReport {
   metadata?: {
     startTime?: number;
     workers?: number;
+    /** Distinct tenant IDs found across all tests' logged output, sorted numerically. */
+    tenantIds?: string[];
   };
 }
 
@@ -81,65 +85,49 @@ export interface ReportSummary {
   stats: ReportStats;
 }
 
-// ── Raw Playwright JSON shapes (varies by PW version) ────────────────────────
-export interface PlaywrightJsonReport {
-  metadata?: {
-    actualWorkers?: number;
-    startTime?: number;
-    duration?: number;
-    status?: string;
-  };
-  stats?: {
-    total?: number;
-    expected?: number;
-    unexpected?: number;
-    flaky?: number;
-    skipped?: number;
-    duration?: number;
-  };
-  startTime?: string;
-  duration?: number;
-  files?: PlaywrightJsonSuite[];
-  suites?: PlaywrightJsonSuite[];
-  errors?: unknown[];
+// ── Raw JUnit XML shapes (Playwright `--reporter=junit` output) ──────────────
+// fast-xml-parser represents attributes as `@_name` and singleton-vs-array
+// child elements ambiguously, so callers should normalise with toArray().
+
+export interface JUnitFailure {
+  '@_message'?: string;
+  '@_type'?: string;
+  '#text'?: string;
 }
 
-export interface PlaywrightJsonSuite {
-  title: string;
-  fileId?: string;
-  file?: string;
-  fileName?: string;
-  projectName?: string;
-  location?: { file: string; line: number; column: number };
-  suites?: PlaywrightJsonSuite[];
-  tests?: PlaywrightJsonTest[];
-  stats?: {
-    total?: number;
-    expected?: number;
-    unexpected?: number;
-    flaky?: number;
-    skipped?: number;
-  };
+export interface JUnitTestCase {
+  '@_name': string;
+  '@_classname'?: string;
+  '@_time'?: string | number;
+  failure?: JUnitFailure | JUnitFailure[];
+  error?: JUnitFailure | JUnitFailure[];
+  skipped?: unknown;
+  'system-out'?: string | string[];
+  'system-err'?: string | string[];
 }
 
-export interface PlaywrightJsonTest {
-  testId?: string;
-  title: string;
-  projectName?: string;
-  location?: { file: string; line: number; column: number };
-  results: PlaywrightJsonResult[];
-  ok?: boolean;
-  outcome?: 'skipped' | 'expected' | 'unexpected' | 'flaky';
-  path?: string[];
+export interface JUnitTestSuite {
+  '@_name'?: string;
+  '@_timestamp'?: string;
+  '@_hostname'?: string;
+  '@_tests'?: string | number;
+  '@_failures'?: string | number;
+  '@_skipped'?: string | number;
+  '@_errors'?: string | number;
+  '@_time'?: string | number;
+  testcase?: JUnitTestCase | JUnitTestCase[];
 }
 
-export interface PlaywrightJsonResult {
-  retry?: number;
-  duration: number;
-  status: 'passed' | 'failed' | 'timedout' | 'interrupted' | 'skipped';
-  error?: {
-    message?: string;
-    stack?: string;
-    value?: string;
-  };
+export interface JUnitTestSuites {
+  '@_tests'?: string | number;
+  '@_failures'?: string | number;
+  '@_skipped'?: string | number;
+  '@_errors'?: string | number;
+  '@_time'?: string | number;
+  testsuite?: JUnitTestSuite | JUnitTestSuite[];
+}
+
+export interface JUnitDocument {
+  testsuites?: JUnitTestSuites;
+  testsuite?: JUnitTestSuite;
 }

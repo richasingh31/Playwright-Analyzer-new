@@ -23,6 +23,8 @@ export interface TestResult {
   file: string;
   line?: number;
   retries: number;
+  /** Tenant ID parsed out of the test's logged output (e.g. "[INFO] TenantId: 4"), when present. */
+  tenantId?: string;
 }
 
 export interface SuiteStats {
@@ -69,6 +71,8 @@ export interface ParsedReport {
   metadata?: {
     startTime?: number;
     workers?: number;
+    /** Distinct tenant IDs found across all tests' logged output, sorted numerically. */
+    tenantIds?: string[];
   };
 }
 

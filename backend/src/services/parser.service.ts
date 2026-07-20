@@ -1,6 +1,4 @@
-import * as cheerio from 'cheerio';
-import * as zlib from 'zlib';
-import AdmZip from 'adm-zip';
+import { XMLParser } from 'fast-xml-parser';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   ParsedReport,
@@ -9,9 +7,10 @@ import type {
   TestStatus,
   ErrorCategory,
   ErrorGroup,
-  PlaywrightJsonReport,
-  PlaywrightJsonSuite,
-  PlaywrightJsonTest,
+  JUnitDocument,
+  JUnitTestSuite,
+  JUnitTestCase,
+  JUnitFailure,
 } from '../types/report.types';
 
 // ── Error categorisation ──────────────────────────────────────────────────────
@@ -47,257 +46,122 @@ function categorizeError(message: string): ErrorCategory {
   return 'application';
 }
 
-// ── Decompression helpers ─────────────────────────────────────────────────────
+// ── Tenant extraction ──────────────────────────────────────────────────────────
+// Multi-tenant API suites log the tenant a test ran against in its console
+// output, e.g. "[INFO] TenantId:  4" or "[INFO] [createSession] Tenant ID: 4".
+const TENANT_ID_PATTERN = /tenant\s*id\s*:\s*(\d+)/i;
 
-function tryDecompress(base64: string): string | null {
-  try {
-    const buf = Buffer.from(base64.trim(), 'base64');
-    try {
-      return zlib.gunzipSync(buf).toString('utf-8');
-    } catch {
-      return zlib.inflateRawSync(buf).toString('utf-8');
-    }
-  } catch {
-    return null;
+function extractTenantId(systemOut: string | string[] | undefined): string | undefined {
+  if (!systemOut) return undefined;
+  const text = toArray(systemOut).join('\n');
+  return text.match(TENANT_ID_PATTERN)?.[1];
+}
+
+// ── XML parsing ────────────────────────────────────────────────────────────────
+
+const ARRAY_ELEMENTS = new Set(['testsuites.testsuite', 'testsuite.testcase', 'testcase.failure', 'testcase.error']);
+
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  textNodeName: '#text',
+  parseAttributeValue: true,
+  trimValues: true,
+  processEntities: true,
+  htmlEntities: true,
+  isArray: (_name, jpath) => ARRAY_ELEMENTS.has(jpath),
+});
+
+function toArray<T>(value: T | T[] | undefined): T[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function num(value: string | number | undefined, fallback = 0): number {
+  if (value === undefined) return fallback;
+  const n = typeof value === 'number' ? value : parseFloat(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** Playwright JUnit `classname` is sometimes prefixed with a project name, e.g. "chromium › tests/example.spec.ts". */
+function extractFile(testcase: JUnitTestCase, suiteName?: string): string {
+  const classname = testcase['@_classname'];
+  if (classname) {
+    const parts = classname.split(/\s*[›>]\s*/).filter(Boolean);
+    return parts[parts.length - 1] ?? classname;
   }
+  return suiteName ?? 'unknown';
 }
 
-// ── ZIP extraction (PW ≥ 1.44 — script id="playwrightReportBase64") ─────────
-
-function extractFromZip(html: string): PlaywrightJsonReport | null {
-  const $ = cheerio.load(html);
-  const zipScript = $('#playwrightReportBase64');
-  if (!zipScript.length) return null;
-
-  const raw = (zipScript.html() ?? '').trim();
-  const dataUriPrefix = 'data:application/zip;base64,';
-  const b64 = raw.startsWith(dataUriPrefix) ? raw.slice(dataUriPrefix.length) : raw;
-  if (!b64) return null;
-
-  try {
-    const buf = Buffer.from(b64, 'base64');
-    const zip = new AdmZip(buf);
-    const reportEntry = zip.getEntry('report.json');
-    if (!reportEntry) return null;
-
-    const report = JSON.parse(reportEntry.getData().toString('utf-8')) as PlaywrightJsonReport;
-
-    // Merge detailed test results from individual file JSONs
-    if (report.files) {
-      report.files = report.files.map((fileEntry) => {
-        const fileId = (fileEntry as PlaywrightJsonSuite & { fileId?: string }).fileId;
-        if (!fileId) return fileEntry;
-        const detailEntry = zip.getEntry(`${fileId}.json`);
-        if (!detailEntry) return fileEntry;
-        try {
-          const detail = JSON.parse(detailEntry.getData().toString('utf-8')) as PlaywrightJsonSuite & { tests?: ZipTest[] };
-          // Normalise errors array → error object that mapTests expects
-          if (detail.tests) {
-            (fileEntry as PlaywrightJsonSuite).tests = detail.tests.map(normalizeZipTest);
-          }
-        } catch { /* keep fileEntry as-is */ }
-        return fileEntry;
-      });
-    }
-
-    return report;
-  } catch {
-    return null;
-  }
+function firstFailure(testcase: JUnitTestCase): JUnitFailure | undefined {
+  return toArray(testcase.failure)[0] ?? toArray(testcase.error)[0];
 }
 
-interface ZipTestResult {
-  duration: number;
-  startTime?: string;
-  retry?: number;
-  status: 'passed' | 'failed' | 'timedout' | 'interrupted' | 'skipped';
-  errors?: Array<{ message?: string; stack?: string; value?: string }>;
-}
-
-interface ZipTest {
-  testId?: string;
-  title: string;
-  projectName?: string;
-  location?: { file: string; line: number; column: number };
-  duration?: number;
-  outcome?: 'skipped' | 'expected' | 'unexpected' | 'flaky';
-  path?: string[];
-  ok?: boolean;
-  results: ZipTestResult[];
-}
-
-function normalizeZipTest(t: ZipTest): PlaywrightJsonTest {
-  return {
-    testId: t.testId,
-    title: t.title,
-    projectName: t.projectName,
-    location: t.location,
-    outcome: t.outcome,
-    path: t.path,
-    ok: t.ok,
-    results: t.results.map((r) => ({
-      duration: r.duration,
-      status: r.status,
-      retry: r.retry,
-      error: r.errors?.[0]
-        ? { message: r.errors[0].message, stack: r.errors[0].stack, value: r.errors[0].value }
-        : undefined,
-    })),
-  };
-}
-
-// ── HTML → JSON extraction (handles multiple PW versions) ────────────────────
-
-function extractReportJson(html: string): PlaywrightJsonReport | null {
-  // Strategy 1 (PW ≥ 1.44): ZIP blob in <script id="playwrightReportBase64">
-  const zipResult = extractFromZip(html);
-  if (zipResult) return zipResult;
-
-  const $ = cheerio.load(html);
-  const scripts: string[] = [];
-  $('script').each((_, el) => {
-    const content = $(el).html();
-    if (content) scripts.push(content);
-  });
-
-  // Strategy 2: base64+gzip variable (PW ≥ 1.22)
-  const base64VarPatterns = [
-    /window\.playwrightReportBase64\s*=\s*["']([A-Za-z0-9+/=\r\n]+)["']/,
-    /window\.__pw_report_data\s*=\s*["']([A-Za-z0-9+/=\r\n]+)["']/,
-    /reportBase64\s*=\s*["']([A-Za-z0-9+/=\r\n]+)["']/,
-  ];
-
-  for (const script of scripts) {
-    for (const re of base64VarPatterns) {
-      const m = script.match(re);
-      if (m?.[1]) {
-        const raw = tryDecompress(m[1]);
-        if (raw) {
-          try {
-            return JSON.parse(raw) as PlaywrightJsonReport;
-          } catch { /* try next */ }
-        }
-      }
-    }
-
-    // Strategy 3: direct JSON variable
-    const directPatterns = [
-      /window\.__PLAYWRIGHT_REPORT__\s*=\s*(\{[\s\S]*?\});\s*(?:window|<\/script>)/,
-      /window\.__pw_report\s*=\s*(\{[\s\S]*?\});\s*(?:window|<\/script>)/,
-    ];
-    for (const re of directPatterns) {
-      const m = script.match(re);
-      if (m?.[1]) {
-        try {
-          return JSON.parse(m[1]) as PlaywrightJsonReport;
-        } catch { /* try next */ }
-      }
-    }
-  }
-
-  // Strategy 4: script tag with data id
-  const tagged = $('#reactData, #reportData, [data-playwright-report]').html();
-  if (tagged) {
-    try {
-      return JSON.parse(tagged) as PlaywrightJsonReport;
-    } catch { /* fall through */ }
-  }
-
-  return null;
-}
-
-// ── Data mapping ──────────────────────────────────────────────────────────────
-
-function outcomeToStatus(
-  outcome?: string,
-  rawStatus?: string,
-): TestStatus {
-  if (outcome === 'flaky') return 'flaky';
-  if (
-    outcome === 'skipped' ||
-    rawStatus === 'skipped'
-  )
-    return 'skipped';
-  if (
-    outcome === 'unexpected' ||
-    rawStatus === 'failed' ||
-    rawStatus === 'timedout' ||
-    rawStatus === 'interrupted'
-  )
-    return 'failed';
+function mapStatus(testcase: JUnitTestCase): TestStatus {
+  if (firstFailure(testcase)) return 'failed';
+  if (testcase.skipped !== undefined) return 'skipped';
   return 'passed';
 }
 
-function mapTests(
-  raw: PlaywrightJsonTest[],
-  file: string,
-  suitePath: string,
-): TestResult[] {
-  return raw.map((t) => {
-    const lastResult = t.results[t.results.length - 1];
-    const status = outcomeToStatus(t.outcome, lastResult?.status);
-    const rawErr = lastResult?.error;
-    const errorMsg =
-      rawErr?.message ?? rawErr?.value ?? '';
+function mapTestCase(testcase: JUnitTestCase, suiteName?: string): TestResult {
+  const status = mapStatus(testcase);
+  const failure = firstFailure(testcase);
+  const errorMessage = failure?.['@_message'] ?? failure?.['#text'] ?? '';
+  const errorStack = failure?.['#text'];
+  const file = extractFile(testcase, suiteName);
+  const tenantId = extractTenantId(testcase['system-out']);
 
-    return {
-      id: t.testId ?? uuidv4(),
-      title: t.title,
-      fullTitle: [...(t.path ?? [suitePath]), t.title].join(' › '),
-      status,
-      duration: lastResult?.duration ?? 0,
-      error: rawErr
-        ? {
-            message: errorMsg,
-            stack: rawErr.stack,
-            category: categorizeError(errorMsg),
-          }
-        : undefined,
-      file: t.location?.file ?? file,
-      line: t.location?.line,
-      retries: Math.max(0, (t.results.length ?? 1) - 1),
-    };
-  });
+  return {
+    id: uuidv4(),
+    title: testcase['@_name'],
+    fullTitle: [suiteName, testcase['@_name']].filter(Boolean).join(' › '),
+    status,
+    duration: Math.round(num(testcase['@_time']) * 1000),
+    tenantId,
+    error: failure
+      ? {
+          message: errorMessage,
+          stack: errorStack,
+          // `message` (the failure's `message=` attribute) is sometimes just a
+          // "file:line:col test name" location stub with no error detail — the
+          // real error text (assertion/timeout/network keywords) often only
+          // appears in the element's text content (`stack`), so categorize
+          // against both rather than `message` alone.
+          category: categorizeError(`${errorMessage}\n${errorStack ?? ''}`),
+        }
+      : undefined,
+    file,
+    retries: 0,
+  };
 }
 
-function mapSuites(
-  raw: PlaywrightJsonSuite[],
-  parentFile = '',
-): TestSuite[] {
-  return raw.map((s) => {
-    const file = s.location?.file ?? s.file ?? s.fileName ?? parentFile;
-    const childSuites = mapSuites(s.suites ?? [], file);
-    const directTests = mapTests(s.tests ?? [], file, s.title);
-    const allTests = [...directTests, ...childSuites.flatMap(flattenTests)];
+function mapTestSuite(suite: JUnitTestSuite): TestSuite {
+  const suiteName = suite['@_name'] ?? 'Suite';
+  const tests = toArray(suite.testcase).map((tc) => mapTestCase(tc, suiteName));
+  const file = tests[0]?.file ?? suiteName;
 
-    return {
-      id: s.fileId ?? uuidv4(),
-      title: s.title ?? s.fileName ?? file,
-      file,
-      tests: directTests,
-      suites: childSuites,
-      stats: {
-        total: allTests.length,
-        passed: allTests.filter((t) => t.status === 'passed').length,
-        failed: allTests.filter((t) => t.status === 'failed').length,
-        skipped: allTests.filter((t) => t.status === 'skipped').length,
-        flaky: allTests.filter((t) => t.status === 'flaky').length,
-      },
-    };
-  });
+  return {
+    id: uuidv4(),
+    title: suiteName,
+    file,
+    tests,
+    suites: [],
+    stats: {
+      total: tests.length,
+      passed: tests.filter((t) => t.status === 'passed').length,
+      failed: tests.filter((t) => t.status === 'failed').length,
+      skipped: tests.filter((t) => t.status === 'skipped').length,
+      flaky: 0,
+    },
+  };
 }
 
 function flattenTests(suite: TestSuite): TestResult[] {
-  return [
-    ...suite.tests,
-    ...suite.suites.flatMap(flattenTests),
-  ];
+  return [...suite.tests, ...suite.suites.flatMap(flattenTests)];
 }
 
 function buildErrorGroups(suites: TestSuite[]): ErrorGroup[] {
-  const allFailed = suites
-    .flatMap(flattenTests)
-    .filter((t) => (t.status === 'failed' || t.status === 'flaky') && t.error);
+  const allFailed = suites.flatMap(flattenTests).filter((t) => t.status === 'failed' && t.error);
 
   const grouped = new Map<ErrorCategory, TestResult[]>();
   for (const test of allFailed) {
@@ -331,44 +195,51 @@ export async function parsePlaywrightReport(
   fileName: string,
   contentHash: string,
 ): Promise<ParsedReport> {
-  const html = fileBuffer.toString('utf-8');
-  const json = extractReportJson(html);
+  const xml = fileBuffer.toString('utf-8');
 
-  if (!json) {
+  let doc: JUnitDocument;
+  try {
+    doc = xmlParser.parse(xml) as JUnitDocument;
+  } catch {
+    throw Object.assign(new Error('Uploaded file is not valid XML.'), { status: 422 });
+  }
+
+  const root = doc.testsuites ?? (doc.testsuite ? { testsuite: doc.testsuite } : undefined);
+  if (!root) {
     throw Object.assign(
       new Error(
-        'Unable to parse Playwright HTML report. ' +
-          'Please ensure you are uploading a valid Playwright-generated HTML report.',
+        'Unable to parse report. Please ensure you are uploading a Playwright JUnit XML report ' +
+          '(generated via `playwright test --reporter=junit`).',
       ),
       { status: 422 },
     );
   }
 
-  const rawSuites = json.files ?? json.suites ?? [];
-  const suites = mapSuites(rawSuites);
+  const suites = toArray(root.testsuite).map(mapTestSuite);
   const allTests = suites.flatMap(flattenTests);
-  const raw = json.stats;
 
-  const passed =
-    raw?.expected ?? allTests.filter((t) => t.status === 'passed').length;
-  const failed =
-    raw?.unexpected ?? allTests.filter((t) => t.status === 'failed').length;
-  const skipped =
-    raw?.skipped ?? allTests.filter((t) => t.status === 'skipped').length;
-  const flaky =
-    raw?.flaky ?? allTests.filter((t) => t.status === 'flaky').length;
-  const total = raw?.total ?? allTests.length;
+  const total = num(root['@_tests'], allTests.length);
+  const failed = allTests.filter((t) => t.status === 'failed').length;
+  const skipped = allTests.filter((t) => t.status === 'skipped').length;
+  const passed = allTests.filter((t) => t.status === 'passed').length;
+  const flaky = 0;
   const duration =
-    raw?.duration ?? json.metadata?.duration ?? json.duration ?? 0;
+    root['@_time'] !== undefined
+      ? Math.round(num(root['@_time']) * 1000)
+      : allTests.reduce((sum, t) => sum + t.duration, 0);
 
-  // Resolve report start time: try metadata.startTime (number ms), then root startTime (ISO string)
-  const startTime: number | undefined =
-    json.metadata?.startTime ??
-    (json.startTime ? new Date(json.startTime).getTime() : undefined);
+  const earliestTimestamp = toArray(root.testsuite)
+    .map((s) => s['@_timestamp'])
+    .filter((t): t is string => !!t)
+    .sort()[0];
+
+  const tenantIds = Array.from(
+    new Set(allTests.map((t) => t.tenantId).filter((t): t is string => !!t)),
+  ).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 
   return {
     id: uuidv4(),
-    name: fileName.replace(/\.html?$/i, ''),
+    name: fileName.replace(/\.xml$/i, ''),
     uploadedAt: new Date(),
     contentHash,
     stats: {
@@ -383,8 +254,9 @@ export async function parsePlaywrightReport(
     suites,
     errorGroups: buildErrorGroups(suites),
     metadata: {
-      startTime,
-      workers: json.metadata?.actualWorkers,
+      startTime: earliestTimestamp ? new Date(earliestTimestamp).getTime() : undefined,
+      workers: undefined,
+      tenantIds: tenantIds.length > 0 ? tenantIds : undefined,
     },
   };
 }

@@ -198,29 +198,55 @@ function StatusIcon({ status }: { status: TestStatus }) {
   return                          <SkipForward   className="h-4 w-4 text-slate-500 shrink-0" />;
 }
 
+interface ReportMeta {
+  id: string;
+  index: number;
+  label: string;
+  shortLabel: string;
+}
+
+const DOT_SIZE = 8;
+const DOT_GAP = 3;
+
 function RunDots({
   runStatuses,
-  reportIds,
+  reportMeta,
+  hoverIdx,
+  onHover,
 }: {
   runStatuses: Map<string, RunStatus>;
-  reportIds: string[];
+  reportMeta: ReportMeta[];
+  hoverIdx: number | null;
+  onHover: (i: number | null) => void;
 }) {
-  if (reportIds.length <= 1) return null;
+  if (reportMeta.length <= 1) return null;
   return (
-    <div className="flex items-center gap-0.5 shrink-0">
-      {reportIds.map((id) => {
-        const rs = runStatuses.get(id);
+    <div className="flex items-center shrink-0" style={{ gap: DOT_GAP }}>
+      {reportMeta.map((rm) => {
+        const rs = runStatuses.get(rm.id);
+        const isHovered = hoverIdx === rm.index;
+        const isDimmed = hoverIdx !== null && hoverIdx !== rm.index;
         return (
           <div
-            key={id}
-            title={rs ? rs.status : 'not in run'}
+            key={rm.id}
+            title={`#${rm.index} · ${rm.label} — ${rs ? rs.status : 'not in this run'}`}
+            onMouseEnter={() => onHover(rm.index)}
+            onMouseLeave={() => onHover(null)}
             style={{
-              width: 7,
-              height: 7,
+              width: DOT_SIZE,
+              height: DOT_SIZE,
               borderRadius: '50%',
               backgroundColor: rs ? DOT_COLOR[rs.status] : '#1e293b',
-              opacity: rs ? 0.9 : 0.25,
-              border: rs ? 'none' : '1px solid #334155',
+              opacity: isDimmed ? 0.2 : rs ? 0.9 : 0.25,
+              border: isHovered
+                ? '2px solid #6366f1'
+                : rs
+                  ? 'none'
+                  : '1px solid #334155',
+              boxSizing: 'content-box',
+              transform: isHovered ? 'scale(1.15)' : undefined,
+              transition: 'opacity 120ms, transform 120ms',
+              cursor: 'default',
             }}
           />
         );
@@ -231,10 +257,14 @@ function RunDots({
 
 function ScenarioItem({
   scenario,
-  reportIds,
+  reportMeta,
+  hoverIdx,
+  onHover,
 }: {
   scenario: ScenarioRow;
-  reportIds: string[];
+  reportMeta: ReportMeta[];
+  hoverIdx: number | null;
+  onHover: (i: number | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cat = scenario.latestError
@@ -258,7 +288,7 @@ function ScenarioItem({
         </span>
 
         {/* Run history dots */}
-        <RunDots runStatuses={scenario.runStatuses} reportIds={reportIds} />
+        <RunDots runStatuses={scenario.runStatuses} reportMeta={reportMeta} hoverIdx={hoverIdx} onHover={onHover} />
 
         {/* Error category badge */}
         {cat && (
@@ -271,7 +301,7 @@ function ScenarioItem({
         )}
 
         {/* Fail count across runs */}
-        {scenario.failCount > 1 && reportIds.length > 1 && (
+        {scenario.failCount > 1 && reportMeta.length > 1 && (
           <span className="shrink-0 text-xs text-red-600/70 tabular-nums">
             {scenario.failCount}× failed
           </span>
@@ -314,11 +344,15 @@ function ScenarioItem({
 
 function ApiGroupBlock({
   group,
-  reportIds,
+  reportMeta,
+  hoverIdx,
+  onHover,
   defaultOpen,
 }: {
   group: ApiGroup;
-  reportIds: string[];
+  reportMeta: ReportMeta[];
+  hoverIdx: number | null;
+  onHover: (i: number | null) => void;
   defaultOpen: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -384,8 +418,36 @@ function ApiGroupBlock({
       {/* Scenario list */}
       {open && (
         <div className="border-t border-slate-300/40 py-2">
+          {reportMeta.length > 1 && (
+            <div className="flex items-center gap-3 px-4 pb-1.5">
+              <span className="flex-1 min-w-0" />
+              <div className="flex items-center shrink-0" style={{ gap: DOT_GAP }}>
+                {reportMeta.map((rm) => (
+                  <span
+                    key={rm.id}
+                    title={rm.label}
+                    onMouseEnter={() => onHover(rm.index)}
+                    onMouseLeave={() => onHover(null)}
+                    className="text-[9px] font-semibold text-center tabular-nums transition-colors"
+                    style={{
+                      width: DOT_SIZE,
+                      color: hoverIdx === rm.index ? '#6366f1' : '#94a3b8',
+                    }}
+                  >
+                    {rm.index}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           {group.scenarios.map((scenario) => (
-            <ScenarioItem key={scenario.fullTitle} scenario={scenario} reportIds={reportIds} />
+            <ScenarioItem
+              key={scenario.fullTitle}
+              scenario={scenario}
+              reportMeta={reportMeta}
+              hoverIdx={hoverIdx}
+              onHover={onHover}
+            />
           ))}
         </div>
       )}
@@ -418,12 +480,33 @@ export function ApiScenariosPage() {
     loadReports();
   }, []);
 
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
   const { apiGroups, sortedReports } = useMemo(
     () => (reports.length > 0 ? buildApiGroups(reports) : { apiGroups: [], sortedReports: [] }),
     [reports],
   );
 
-  const reportIds = sortedReports.map((r) => r.id);
+  const reportMeta: ReportMeta[] = useMemo(() => {
+    const dateOf = (r: ParsedReport) => new Date(r.metadata?.startTime ?? r.uploadedAt);
+    const dayLabels = sortedReports.map((r) =>
+      dateOf(r).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    );
+    const timeLabels = sortedReports.map(
+      (r, i) => `${dayLabels[i]}, ${dateOf(r).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
+    );
+    return sortedReports.map((r, i) => {
+      const dayDup = dayLabels.filter((l) => l === dayLabels[i]).length > 1;
+      const timeDup = timeLabels.filter((l) => l === timeLabels[i]).length > 1;
+      const iso = r.metadata?.startTime ? new Date(r.metadata.startTime).toISOString() : r.uploadedAt;
+      return {
+        id: r.id,
+        index: i + 1,
+        label: `${r.name} — ${formatDate(iso)}`,
+        shortLabel: !dayDup ? dayLabels[i] : timeDup ? `${timeLabels[i]} (#${i + 1})` : timeLabels[i],
+      };
+    });
+  }, [sortedReports]);
 
   // Apply filters
   const filtered = useMemo(() => {
@@ -465,7 +548,7 @@ export function ApiScenariosPage() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-slate-900 mb-2">No reports yet</h2>
           <p className="text-slate-600 max-w-sm">
-            Upload Playwright HTML reports to explore API and scenario combinations.
+            Upload Playwright JUnit XML reports to explore API and scenario combinations.
           </p>
         </div>
         <Button size="lg" icon={<Upload className="h-5 w-5" />} onClick={() => setShowUploadModal(true)}>
@@ -535,14 +618,46 @@ export function ApiScenariosPage() {
           <CheckCircle2 className="h-3.5 w-3.5" />
           {totals.passed} passing
         </span>
-        {sortedReports.length > 1 && (
-          <span className="ml-auto text-xs text-slate-400">
-            Run history: {sortedReports.map((r) => formatDate(
-              r.metadata?.startTime ? new Date(r.metadata.startTime).toISOString() : r.uploadedAt
-            ).split(',')[0]).join(' → ')}
-          </span>
-        )}
       </div>
+
+      {/* Per-report legend — each chip is dot #N below; hover to trace that report's column down every scenario list */}
+      {reportMeta.length > 1 && (
+        <Card className="py-3 px-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium text-slate-500 shrink-0 mr-1">
+              Uploads (oldest → newest, hover to trace a run):
+            </span>
+            {reportMeta.map((rm, i) => {
+              const rep = sortedReports[i];
+              const tone =
+                rep.stats.passRate === 100 ? '#10b981' : rep.stats.passRate >= 70 ? '#f59e0b' : '#ef4444';
+              return (
+                <button
+                  key={rm.id}
+                  onMouseEnter={() => setHoverIdx(rm.index)}
+                  onMouseLeave={() => setHoverIdx(null)}
+                  title={rm.label}
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                    hoverIdx === rm.index
+                      ? 'border-indigo-500/50 bg-indigo-500/10'
+                      : 'border-slate-300 bg-white hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="font-mono text-slate-400">#{rm.index}</span>
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ backgroundColor: tone }}
+                  />
+                  <span className="font-medium text-slate-700">{rm.shortLabel}</span>
+                  <span className="tabular-nums" style={{ color: tone }}>
+                    {rep.stats.passRate}%
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card className="py-3 px-4">
@@ -595,22 +710,11 @@ export function ApiScenariosPage() {
             <ApiGroupBlock
               key={group.apiKey}
               group={group}
-              reportIds={reportIds}
+              reportMeta={reportMeta}
+              hoverIdx={hoverIdx}
+              onHover={setHoverIdx}
               defaultOpen={i === 0 || group.failCount > 0}
             />
-          ))}
-        </div>
-      )}
-
-      {/* Run legend (only when multiple reports) */}
-      {sortedReports.length > 1 && (
-        <div className="flex items-center gap-4 pt-2 flex-wrap">
-          <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">Run dots legend</span>
-          {sortedReports.map((r, i) => (
-            <span key={r.id} className="flex items-center gap-1.5 text-xs text-slate-500">
-              <span className="font-mono text-slate-400">#{i + 1}</span>
-              {r.name}
-            </span>
           ))}
         </div>
       )}

@@ -11,11 +11,10 @@ import {
   Upload,
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
-import type { ParsedReport, ReportSummary } from '../types';
+import type { ReportSummary } from '../types';
 import { formatDuration, formatDate } from '../utils/helpers';
 import { TrendsLineChart } from '../components/charts/TrendsLineChart';
 import { DurationTrendChart } from '../components/trends/DurationTrendChart';
-import { BusinessInsights } from '../components/trends/BusinessInsights';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
@@ -78,8 +77,6 @@ export function TrendsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [fullReports, setFullReports] = useState<ParsedReport[]>([]);
-  const [insightsLoading, setInsightsLoading] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
   const loadReports = () => {
@@ -101,16 +98,6 @@ export function TrendsPage() {
     loadReports();
   }, []);
 
-  // Fetch full report data (with per-test details) for business insights
-  useEffect(() => {
-    if (reports.length === 0) return;
-    setInsightsLoading(true);
-    Promise.all(reports.map((r) => reportsApi.getById(r.id)))
-      .then(setFullReports)
-      .catch(() => {})
-      .finally(() => setInsightsLoading(false));
-  }, [reports]);
-
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Delete this report? This action cannot be undone.')) return;
@@ -131,8 +118,13 @@ export function TrendsPage() {
       ? Math.round(reports.reduce((s, r) => s + r.stats.passRate, 0) / reports.length)
       : 0;
 
-  const totalTests = reports.reduce((s, r) => s + r.stats.total, 0);
-  const latestReport = reports[0];
+  const avgFailRate =
+    reports.length > 0
+      ? Math.round(
+          reports.reduce((s, r) => s + (r.stats.total > 0 ? (r.stats.failed / r.stats.total) * 100 : 0), 0) /
+            reports.length,
+        )
+      : 0;
 
   if (reports.length === 0) {
     return (
@@ -143,7 +135,7 @@ export function TrendsPage() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-slate-900 mb-2">No reports yet</h2>
           <p className="text-slate-600 max-w-sm">
-            Upload your first Playwright HTML report to start tracking trends.
+            Upload your first Playwright JUnit XML report to start tracking trends.
           </p>
         </div>
         <Button
@@ -198,7 +190,7 @@ export function TrendsPage() {
       )}
 
       {/* Summary metrics */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <MetricCard label="Reports Analyzed" value={reports.length} />
         <MetricCard
           label="Avg Pass Rate"
@@ -206,13 +198,9 @@ export function TrendsPage() {
           sub="across all runs"
         />
         <MetricCard
-          label="Total Test Runs"
-          value={totalTests.toLocaleString()}
-        />
-        <MetricCard
-          label="Latest Pass Rate"
-          value={latestReport ? `${latestReport.stats.passRate}%` : '—'}
-          sub={latestReport ? formatDate(latestReport.startTime ? new Date(latestReport.startTime).toISOString() : latestReport.uploadedAt) : ''}
+          label="Avg Fail Rate"
+          value={`${avgFailRate}%`}
+          sub="across all runs"
         />
       </div>
 
@@ -221,7 +209,7 @@ export function TrendsPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader
-              title="Pass Rate Over Time"
+              title="Test Results by Date"
               subtitle="Pass/fail distribution across all runs"
             />
             <TrendsLineChart reports={reports} />
@@ -338,15 +326,6 @@ export function TrendsPage() {
           </table>
         </div>
       </Card>
-
-      {/* Business intelligence section */}
-      {insightsLoading ? (
-        <div className="rounded-xl border border-slate-300/50 bg-slate-200/30 p-8 text-center">
-          <p className="text-slate-600 text-sm animate-pulse">Loading quality intelligence…</p>
-        </div>
-      ) : (
-        <BusinessInsights reports={fullReports} />
-      )}
     </div>
   );
 }

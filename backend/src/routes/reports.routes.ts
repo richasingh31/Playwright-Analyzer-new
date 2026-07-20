@@ -11,12 +11,13 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (
-      file.mimetype === 'text/html' ||
-      file.originalname.toLowerCase().endsWith('.html')
+      file.mimetype === 'text/xml' ||
+      file.mimetype === 'application/xml' ||
+      file.originalname.toLowerCase().endsWith('.xml')
     ) {
       cb(null, true);
     } else {
-      cb(new Error('Only Playwright HTML report files are accepted.'));
+      cb(new Error('Only Playwright JUnit XML report files are accepted.'));
     }
   },
 });
