@@ -18,6 +18,7 @@ import {
 import { reportsApi } from '../api/client';
 import type { ParsedReport, TestStatus, TestSuite, TestResult } from '../types';
 import { Card } from '../components/ui/Card';
+import { TenantStatusPieChart } from '../components/charts/TenantStatusPieChart';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { formatDuration } from '../utils/helpers';
@@ -330,7 +331,7 @@ function CompareApiGroupBlock({
   tenants: string[];
   tenantLabels: Map<string, string>;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const divergentCount = rows.filter((r) => r.isDivergent).length;
   const failCount = rows.filter((r) => r.failCount > 0).length;
 
@@ -489,7 +490,7 @@ function SingleTenantApiGroupBlock({
   otherTenants: string[];
   tenantLabels: Map<string, string>;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const passCount = rows.filter((r) => r.tenantStatuses.get(tenantKey)?.status === 'passed').length;
   const failCount = rows.filter((r) => {
     const s = r.tenantStatuses.get(tenantKey)?.status;
@@ -736,11 +737,23 @@ export function TenantComparisonPage() {
         </div>
       )}
 
+      {/* Pass/fail breakdown per tenant */}
+      <Card className="p-5">
+        <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+          Pass / Fail by Tenant
+        </div>
+        <div className={`grid gap-4`} style={{ gridTemplateColumns: `repeat(${Math.min(tenants.length, 4)}, minmax(0, 1fr))` }}>
+          {tenants.map((t) => {
+            const s = statsByTenant.get(t);
+            if (!s) return null;
+            return <TenantStatusPieChart key={t} label={tenantLabels.get(t) ?? t} stats={s} />;
+          })}
+        </div>
+      </Card>
+
       {/* Tenant tabs */}
       <div className="flex items-center gap-1 border-b border-slate-300/60 flex-wrap">
         {tenants.map((t) => {
-          const s = statsByTenant.get(t);
-          const passRate = s && s.total > 0 ? Math.round((s.passed / s.total) * 100) : 0;
           const isActive = activeTab === t;
           return (
             <button
@@ -753,15 +766,6 @@ export function TenantComparisonPage() {
               }`}
             >
               {tenantLabels.get(t) ?? t}
-              {s && (
-                <span
-                  className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
-                    passRate === 100 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'
-                  }`}
-                >
-                  {passRate}%
-                </span>
-              )}
             </button>
           );
         })}
