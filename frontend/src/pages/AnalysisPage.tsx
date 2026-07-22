@@ -8,18 +8,15 @@ import {
   AlertTriangle,
   Clock,
   Users,
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
+  MousePointerClick,
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
-import type { ParsedReport, TestSuite, TestResult } from '../types';
-import { formatDuration, formatDate, flattenTests } from '../utils/helpers';
+import type { ParsedReport, TestSuite } from '../types';
+import { formatDuration, formatDate } from '../utils/helpers';
 import { exportAnalysisPDF } from '../utils/pdfExport';
 import { StatusDonutChart } from '../components/charts/StatusDonutChart';
-import { SuiteBarChart } from '../components/charts/SuiteBarChart';
+import { SuiteBarChart, SuiteDetailCard } from '../components/charts/SuiteBarChart';
 import { Card, CardHeader } from '../components/ui/Card';
-import { StatusBadge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { ExportPDFButton } from '../components/ui/ExportPDFButton';
@@ -60,97 +57,6 @@ function StatCard({
   );
 }
 
-// ── Collapsible suite row ─────────────────────────────────────────────────────
-
-function SuiteRow({ suite, reportId }: { suite: TestSuite; reportId: string }) {
-  const [open, setOpen] = useState(false);
-  const all = flattenTests([suite]);
-
-  return (
-    <div className="border border-slate-300/60 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen((p) => !p)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-200/60 transition-colors text-left"
-      >
-        {open ? (
-          <ChevronDown className="h-4 w-4 text-slate-600 shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-slate-600 shrink-0" />
-        )}
-        <span className="flex-1 text-sm font-medium text-slate-900 truncate">{suite.title}</span>
-        <span className="text-xs text-slate-500 font-mono shrink-0">{suite.file}</span>
-        <div className="flex items-center gap-2 ml-3 shrink-0">
-          {suite.stats.passed > 0 && (
-            <span className="text-xs text-emerald-600">{suite.stats.passed}✓</span>
-          )}
-          {suite.stats.failed > 0 && (
-            <span className="text-xs text-red-600">{suite.stats.failed}✗</span>
-          )}
-          {suite.stats.skipped > 0 && (
-            <span className="text-xs text-slate-600">{suite.stats.skipped}⊘</span>
-          )}
-          {suite.stats.flaky > 0 && (
-            <span className="text-xs text-amber-600">{suite.stats.flaky}~</span>
-          )}
-        </div>
-      </button>
-
-      {open && (
-        <div className="border-t border-slate-300/40 divide-y divide-slate-300/30">
-          {all.map((test) => (
-            <TestRow key={test.id} test={test} reportId={reportId} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Individual test row ───────────────────────────────────────────────────────
-
-function TestRow({ test }: { test: TestResult; reportId: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const showStack = expanded && test.error?.stack;
-
-  return (
-    <div className="px-4 py-2.5 hover:bg-slate-200/30 transition-colors">
-      <div
-        className="flex items-start gap-3 cursor-pointer"
-        onClick={() => test.error && setExpanded((p) => !p)}
-      >
-        <div className="mt-0.5 shrink-0">
-          <StatusBadge status={test.status} size="sm" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-slate-800 truncate">{test.title}</p>
-          {test.error && (
-            <p className="text-xs text-red-600/80 mt-0.5 truncate">{test.error.message}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {test.retries > 0 && (
-            <span className="text-xs text-amber-600/70">↻ {test.retries}</span>
-          )}
-          <span className="text-xs text-slate-500 font-mono">{formatDuration(test.duration)}</span>
-          {test.error && (
-            <ChevronDown
-              className={`h-3.5 w-3.5 text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`}
-            />
-          )}
-        </div>
-      </div>
-
-      {showStack && (
-        <div className="mt-2 ml-20 rounded-lg bg-slate-100/80 border border-slate-300/50 p-3 overflow-x-auto">
-          <pre className="text-xs text-slate-600 font-mono leading-relaxed whitespace-pre-wrap break-all">
-            {test.error?.stack}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function AnalysisPage() {
@@ -159,9 +65,11 @@ export function AnalysisPage() {
   const [report, setReport] = useState<ParsedReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedSuite, setSelectedSuite] = useState<TestSuite | null>(null);
 
   useEffect(() => {
     if (!id) return;
+    setSelectedSuite(null);
     reportsApi
       .getById(id)
       .then(setReport)
@@ -203,20 +111,8 @@ export function AnalysisPage() {
           </div>
         </div>
 
-        {/* Pass rate pill + export button */}
+        {/* Export button */}
         <div className="flex items-center gap-3 shrink-0">
-          <div
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 border ${
-              stats.passRate >= 90
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
-                : stats.passRate >= 70
-                ? 'border-amber-500/30 bg-amber-500/10 text-amber-600'
-                : 'border-red-500/30 bg-red-500/10 text-red-600'
-            }`}
-          >
-            <span className="text-2xl font-bold">{stats.passRate}%</span>
-            <span className="text-xs opacity-70">Pass Rate</span>
-          </div>
           <ExportPDFButton onClick={() => exportAnalysisPDF(report)} />
         </div>
       </div>
@@ -277,36 +173,31 @@ export function AnalysisPage() {
             subtitle="Click a segment to drill into that category"
           />
           <StatusDonutChart stats={stats} reportId={id!} />
+
+          <div className="mt-5 pt-5 border-t border-slate-200">
+            {selectedSuite ? (
+              <SuiteDetailCard suite={selectedSuite} onClose={() => setSelectedSuite(null)} />
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-slate-400">
+                <MousePointerClick className="h-5 w-5" />
+                <p className="text-xs">Click a suite in "Results by Suite" to see its pass/fail breakdown here</p>
+              </div>
+            )}
+          </div>
         </Card>
 
         <Card>
-          <CardHeader title="Results by Suite" />
-          <SuiteBarChart suites={suites} />
+          <CardHeader
+            title="Results by Suite"
+            subtitle="Click a suite to see its pass/fail breakdown"
+          />
+          <SuiteBarChart
+            suites={suites}
+            onSuiteSelect={(s) => setSelectedSuite((prev) => (prev?.id === s.id ? null : s))}
+            selectedSuiteId={selectedSuite?.id}
+          />
         </Card>
       </div>
-
-      {/* Suite list */}
-      <Card>
-        <CardHeader
-          title="Test Suites"
-          subtitle={`${suites.length} suite${suites.length !== 1 ? 's' : ''} · ${stats.total} tests total`}
-          action={
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<ExternalLink className="h-3.5 w-3.5" />}
-              onClick={() => navigate(`/analysis/${id}/category/failed`)}
-            >
-              View failures
-            </Button>
-          }
-        />
-        <div className="space-y-2">
-          {suites.map((s) => (
-            <SuiteRow key={s.id} suite={s} reportId={id!} />
-          ))}
-        </div>
-      </Card>
     </div>
   );
 }

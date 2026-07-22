@@ -11,10 +11,11 @@ import {
   Upload,
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
-import type { ReportSummary } from '../types';
+import type { ParsedReport, ReportSummary } from '../types';
 import { formatDuration, formatDate } from '../utils/helpers';
 import { TrendsLineChart } from '../components/charts/TrendsLineChart';
 import { DurationTrendChart } from '../components/trends/DurationTrendChart';
+import { FailuresByFolderCard } from '../components/trends/FailuresByFolderCard';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
@@ -74,6 +75,7 @@ function MetricCard({
 export function TrendsPage() {
   const navigate = useNavigate();
   const [reports, setReports] = useState<ReportSummary[]>([]);
+  const [fullReports, setFullReports] = useState<ParsedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -89,7 +91,9 @@ export function TrendsPage() {
           return bTime - aTime;
         });
         setReports(sorted);
+        return Promise.all(sorted.map((s) => reportsApi.getById(s.id)));
       })
+      .then((full) => setFullReports(full))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -105,6 +109,7 @@ export function TrendsPage() {
     try {
       await reportsApi.delete(id);
       setReports((prev) => prev.filter((r) => r.id !== id));
+      setFullReports((prev) => prev.filter((r) => r.id !== id));
     } finally {
       setDeleting(null);
     }
@@ -190,8 +195,7 @@ export function TrendsPage() {
       )}
 
       {/* Summary metrics */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard label="Reports Analyzed" value={reports.length} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <MetricCard
           label="Avg Pass Rate"
           value={`${avgPassRate}%`}
@@ -214,15 +218,12 @@ export function TrendsPage() {
             />
             <TrendsLineChart reports={reports} />
           </Card>
-          <Card>
-            <CardHeader
-              title="Suite Duration Trend"
-              subtitle="Total run time per report — rising trend means slower CI"
-            />
-            <DurationTrendChart reports={reports} />
-          </Card>
+          <DurationTrendChart reports={reports} />
         </div>
       )}
+
+      {/* Failures by Folder */}
+      <FailuresByFolderCard reports={fullReports} />
 
       {/* Report table */}
       <Card>
