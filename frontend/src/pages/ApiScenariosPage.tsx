@@ -82,6 +82,11 @@ function shortSuiteName(title: string, file: string): string {
   return base.replace(/\.spec\.(ts|js|tsx|jsx)$/, '').replace(/\.(ts|js|tsx|jsx)$/, '');
 }
 
+function dateKeyOf(report: ParsedReport): string {
+  const d = new Date(report.metadata?.startTime ?? report.uploadedAt);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function buildApiGroups(reports: ParsedReport[]): {
   apiGroups: ApiGroup[];
   sortedReports: ParsedReport[];
@@ -465,6 +470,8 @@ export function ApiScenariosPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [dateFilter, setDateFilter] = useState<string>('all');
+  const [suiteFilter, setSuiteFilter] = useState<string>('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
 
   const loadReports = () => {
@@ -482,10 +489,56 @@ export function ApiScenariosPage() {
 
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  const { apiGroups, sortedReports } = useMemo(
-    () => (reports.length > 0 ? buildApiGroups(reports) : { apiGroups: [], sortedReports: [] }),
-    [reports],
+  // Available dates across all uploaded reports, newest first
+  const availableDates = useMemo(() => {
+    const map = new Map<string, Date>();
+    reports.forEach((r) => {
+      const key = dateKeyOf(r);
+      if (!map.has(key)) map.set(key, new Date(r.metadata?.startTime ?? r.uploadedAt));
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => b[1].getTime() - a[1].getTime())
+      .map(([key, date]) => ({
+        key,
+        label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      }));
+  }, [reports]);
+
+  // Reset the date filter if the selected date no longer has any reports
+  useEffect(() => {
+    if (dateFilter !== 'all' && !availableDates.some((d) => d.key === dateFilter)) {
+      setDateFilter('all');
+    }
+  }, [availableDates, dateFilter]);
+
+  const dateFilteredReports = useMemo(
+    () => (dateFilter === 'all' ? reports : reports.filter((r) => dateKeyOf(r) === dateFilter)),
+    [reports, dateFilter],
   );
+
+  const { apiGroups, sortedReports } = useMemo(
+    () =>
+      dateFilteredReports.length > 0
+        ? buildApiGroups(dateFilteredReports)
+        : { apiGroups: [], sortedReports: [] },
+    [dateFilteredReports],
+  );
+
+  // Available suites for the current date selection
+  const availableSuites = useMemo(
+    () =>
+      apiGroups
+        .map((g) => ({ key: g.apiKey, name: g.apiName }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [apiGroups],
+  );
+
+  // Reset the suite filter if it no longer applies (e.g. date changed)
+  useEffect(() => {
+    if (suiteFilter !== 'all' && !availableSuites.some((s) => s.key === suiteFilter)) {
+      setSuiteFilter('all');
+    }
+  }, [availableSuites, suiteFilter]);
 
   const reportMeta: ReportMeta[] = useMemo(() => {
     const dateOf = (r: ParsedReport) => new Date(r.metadata?.startTime ?? r.uploadedAt);
@@ -512,6 +565,7 @@ export function ApiScenariosPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return apiGroups
+      .filter((group) => suiteFilter === 'all' || group.apiKey === suiteFilter)
       .map((group) => {
         const scenarios = group.scenarios.filter((s) => {
           const matchStatus = statusFilter === 'all' || s.latestStatus === statusFilter;
@@ -521,7 +575,7 @@ export function ApiScenariosPage() {
         return { ...group, scenarios };
       })
       .filter((g) => g.scenarios.length > 0);
-  }, [apiGroups, search, statusFilter]);
+  }, [apiGroups, search, statusFilter, suiteFilter]);
 
   // Summary stats
   const totals = useMemo(() => {
@@ -582,7 +636,10 @@ export function ApiScenariosPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">API &amp; Scenarios</h1>
           <p className="text-slate-600 text-sm mt-0.5">
-            {totals.apis} API{totals.apis !== 1 ? 's' : ''} · {totals.scenarios} scenario{totals.scenarios !== 1 ? 's' : ''} across {reports.length} report{reports.length !== 1 ? 's' : ''}
+            {totals.apis} API{totals.apis !== 1 ? 's' : ''} · {totals.scenarios} scenario{totals.scenarios !== 1 ? 's' : ''} across {dateFilteredReports.length} report{dateFilteredReports.length !== 1 ? 's' : ''}
+            {dateFilter !== 'all' && (
+              <> on {availableDates.find((d) => d.key === dateFilter)?.label}</>
+            )}
           </p>
         </div>
         <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => setShowUploadModal(true)}>
@@ -673,6 +730,34 @@ export function ApiScenariosPage() {
               className="w-full bg-slate-100/60 border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
             />
           </div>
+
+          {/* Date dropdown */}
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="bg-slate-100/60 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors shrink-0"
+          >
+            <option value="all">All dates</option>
+            {availableDates.map((d) => (
+              <option key={d.key} value={d.key}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Suite dropdown */}
+          <select
+            value={suiteFilter}
+            onChange={(e) => setSuiteFilter(e.target.value)}
+            className="bg-slate-100/60 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors shrink-0 max-w-56"
+          >
+            <option value="all">All suites</option>
+            {availableSuites.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.name}
+              </option>
+            ))}
+          </select>
 
           {/* Status tabs */}
           <div className="flex items-center gap-1">

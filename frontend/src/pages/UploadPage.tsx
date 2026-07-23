@@ -8,7 +8,6 @@ import {
   ScanLine,
   Sparkles,
   Inbox,
-  ChevronRight,
   Clock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -24,9 +23,30 @@ const STEPS = [
 ];
 
 function passRateTone(rate: number) {
-  if (rate >= 85) return { text: 'text-emerald-600', bg: 'bg-emerald-50', ring: 'ring-emerald-200' };
-  if (rate >= 70) return { text: 'text-amber-600', bg: 'bg-amber-50', ring: 'ring-amber-200' };
-  return { text: 'text-red-600', bg: 'bg-red-50', ring: 'ring-red-200' };
+  if (rate >= 85) return { text: 'text-emerald-600', bg: 'bg-emerald-50' };
+  if (rate >= 70) return { text: 'text-amber-600', bg: 'bg-amber-50' };
+  return { text: 'text-red-600', bg: 'bg-red-50' };
+}
+
+const BAR_COLORS = ['#f97316', '#22d3ee', '#6366f1', '#c084fc'];
+
+/** Small decorative 4-bar sparkline whose bar heights vary per report so rows don't look identical. */
+function MiniBars({ seed }: { seed: string }) {
+  return (
+    <div className="flex items-end gap-0.5 h-6 shrink-0">
+      {BAR_COLORS.map((color, i) => {
+        const code = seed.charCodeAt((i * 7) % seed.length) + i * 13;
+        const height = 35 + (code % 65);
+        return (
+          <span
+            key={i}
+            className="w-1 rounded-full"
+            style={{ height: `${height}%`, backgroundColor: color }}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 export function UploadPage() {
@@ -45,7 +65,13 @@ export function UploadPage() {
     reportsApi
       .getAll()
       .then((data) =>
-        setRecent([...data].sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt))),
+        setRecent(
+          [...data].sort((a, b) => {
+            const aTime = a.startTime ?? new Date(a.uploadedAt).getTime();
+            const bTime = b.startTime ?? new Date(b.uploadedAt).getTime();
+            return bTime - aTime;
+          }),
+        ),
       )
       .catch(() => setRecent([]));
   }, []);
@@ -89,11 +115,6 @@ export function UploadPage() {
   };
 
   const activeStep = uploading ? 1 : file ? 1 : 0;
-
-  const avgPassRate =
-    recent && recent.length
-      ? Math.round(recent.reduce((sum, r) => sum + r.stats.passRate, 0) / recent.length)
-      : null;
 
   return (
     <div className="animate-slide-up relative">
@@ -302,25 +323,13 @@ export function UploadPage() {
               <Clock className="h-4 w-4 text-slate-400" />
               <h3 className="text-sm font-semibold text-slate-900">Recent Reports</h3>
             </div>
-            {avgPassRate !== null && (
-              <span
-                className={clsx(
-                  'rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset',
-                  passRateTone(avgPassRate).text,
-                  passRateTone(avgPassRate).bg,
-                  passRateTone(avgPassRate).ring,
-                )}
-              >
-                {avgPassRate}% avg pass
-              </span>
-            )}
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="max-h-[420px] overflow-y-auto p-3 space-y-3">
             {recent === null &&
               Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 px-5 py-4 border-b border-slate-50 animate-pulse">
-                  <div className="h-9 w-9 rounded-lg bg-slate-100" />
+                <div key={i} className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3.5 animate-pulse">
+                  <div className="h-10 w-10 rounded-xl bg-slate-100" />
                   <div className="flex-1 space-y-2">
                     <div className="h-3 w-2/3 rounded bg-slate-100" />
                     <div className="h-2.5 w-1/3 rounded bg-slate-100" />
@@ -347,23 +356,23 @@ export function UploadPage() {
                   <button
                     key={r.id}
                     onClick={() => navigate(`/analysis/${r.id}`)}
-                    className="flex w-full items-center gap-3 border-b border-slate-50 px-5 py-3.5 text-left transition-colors hover:bg-slate-50 last:border-b-0"
+                    className="flex w-full items-center gap-3 rounded-2xl bg-slate-50 hover:bg-slate-100 px-4 py-3.5 text-left transition-colors"
                   >
-                    <div className={clsx('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', tone.bg, tone.text)}>
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
                       <FileText className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-900">
+                      <p className="truncate text-sm font-bold text-slate-900">
                         {formatDate(r.startTime ? new Date(r.startTime).toISOString() : r.uploadedAt)}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-400">
+                      <p className="mt-0.5 text-xs text-slate-500">
                         {timeAgo(r.uploadedAt)} · {r.stats.total} tests
                       </p>
                     </div>
-                    <span className={clsx('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold', tone.bg, tone.text)}>
+                    <MiniBars seed={r.id} />
+                    <span className={clsx('shrink-0 rounded-xl px-2.5 py-1.5 text-sm font-bold', tone.bg, tone.text)}>
                       {r.stats.passRate}%
                     </span>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
                   </button>
                 );
               })}

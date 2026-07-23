@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
@@ -9,17 +9,39 @@ import {
   Trash2,
   ArrowUpRight,
   Upload,
+  Layers,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  SkipForward,
+  CalendarRange,
+  X,
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
 import type { ParsedReport, ReportSummary } from '../types';
 import { formatDuration, formatDate } from '../utils/helpers';
 import { TrendsLineChart } from '../components/charts/TrendsLineChart';
+import { StatusDonutChart } from '../components/charts/StatusDonutChart';
+import { PassRateLineTrendChart } from '../components/charts/PassRateLineTrendChart';
 import { DurationTrendChart } from '../components/trends/DurationTrendChart';
 import { FailuresByFolderCard } from '../components/trends/FailuresByFolderCard';
+import { TopFailuresCard } from '../components/trends/TopFailuresCard';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
+
+function reportTime(r: ReportSummary): number {
+  return r.startTime ?? new Date(r.uploadedAt).getTime();
+}
+
+function fullReportTime(r: ParsedReport): number {
+  return r.metadata?.startTime ?? new Date(r.uploadedAt).getTime();
+}
+
+function toDateInputValue(ts: number): string {
+  return new Date(ts).toISOString().slice(0, 10);
+}
 
 // ── Mini pass-rate sparkle badge ──────────────────────────────────────────────
 function PassRateBadge({ rate }: { rate: number }) {
@@ -71,6 +93,118 @@ function MetricCard({
   );
 }
 
+// ── Latest-run KPI card ────────────────────────────────────────────────────────
+function KpiDelta({
+  current,
+  previous,
+  invert = false,
+}: {
+  current: number;
+  previous?: number;
+  invert?: boolean;
+}) {
+  if (previous === undefined) {
+    return <span className="text-xs text-slate-400">no previous run</span>;
+  }
+  const delta = current - previous;
+  if (delta === 0) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-slate-500">
+        <Minus className="h-3 w-3" /> same as last run
+      </span>
+    );
+  }
+  const improved = invert ? delta < 0 : delta > 0;
+  const Icon = delta > 0 ? TrendingUp : TrendingDown;
+  return (
+    <span className={`flex items-center gap-1 text-xs font-medium ${improved ? 'text-emerald-600' : 'text-red-600'}`}>
+      <Icon className="h-3 w-3" />
+      {delta > 0 ? '+' : ''}
+      {delta} vs last run
+    </span>
+  );
+}
+
+function KpiStatCard({
+  icon,
+  tone,
+  label,
+  value,
+  previous,
+  invert,
+}: {
+  icon: React.ReactNode;
+  tone: string;
+  label: string;
+  value: number;
+  previous?: number;
+  invert?: boolean;
+}) {
+  return (
+    <Card className="py-4 px-4">
+      <div className="flex items-center gap-3">
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl shrink-0 ${tone}`}>{icon}</div>
+        <div className="min-w-0">
+          <p className="text-2xl font-bold text-slate-900 leading-tight tabular-nums">{value}</p>
+          <p className="text-xs text-slate-500">{label}</p>
+        </div>
+      </div>
+      <div className="mt-2.5 pl-[52px]">
+        <KpiDelta current={value} previous={previous} invert={invert} />
+      </div>
+    </Card>
+  );
+}
+
+// ── Date range filter control ─────────────────────────────────────────────────
+function DateRangeFilter({
+  from,
+  to,
+  minDate,
+  maxDate,
+  onChange,
+}: {
+  from: string;
+  to: string;
+  minDate: string;
+  maxDate: string;
+  onChange: (from: string, to: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs flex-wrap">
+      <span className="flex items-center gap-1.5 text-slate-500 font-medium shrink-0">
+        <CalendarRange className="h-3.5 w-3.5" /> Date range
+      </span>
+      <input
+        type="date"
+        value={from}
+        min={minDate}
+        max={to || maxDate}
+        onChange={(e) => onChange(e.target.value, to)}
+        className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
+      />
+      <span className="text-slate-400">to</span>
+      <input
+        type="date"
+        value={to}
+        min={from || minDate}
+        max={maxDate}
+        onChange={(e) => onChange(from, e.target.value)}
+        className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
+      />
+      {(from || to) && (
+        <button
+          onClick={() => onChange('', '')}
+          className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors"
+          title="Clear date filter"
+        >
+          <X className="h-3.5 w-3.5" /> Clear
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export function TrendsPage() {
   const navigate = useNavigate();
@@ -80,6 +214,8 @@ export function TrendsPage() {
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const loadReports = () => {
     return reportsApi
@@ -115,21 +251,46 @@ export function TrendsPage() {
     }
   };
 
+  // Date-range filter applied across every section of the page. Computed with useMemo
+  // (rather than after the loading/error guards below) so hook order stays stable.
+  const filteredReports = useMemo(() => {
+    if (!dateFrom && !dateTo) return reports;
+    const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : -Infinity;
+    const toTs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : Infinity;
+    return reports.filter((r) => {
+      const t = reportTime(r);
+      return t >= fromTs && t <= toTs;
+    });
+  }, [reports, dateFrom, dateTo]);
+
+  const filteredFullReports = useMemo(() => {
+    if (!dateFrom && !dateTo) return fullReports;
+    const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : -Infinity;
+    const toTs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : Infinity;
+    return fullReports.filter((r) => {
+      const t = fullReportTime(r);
+      return t >= fromTs && t <= toTs;
+    });
+  }, [fullReports, dateFrom, dateTo]);
+
   if (loading) return <FullPageSpinner label="Loading trends…" />;
   if (error) return <ErrorState message={error} />;
 
   const avgPassRate =
-    reports.length > 0
-      ? Math.round(reports.reduce((s, r) => s + r.stats.passRate, 0) / reports.length)
+    filteredReports.length > 0
+      ? Math.round(filteredReports.reduce((s, r) => s + r.stats.passRate, 0) / filteredReports.length)
       : 0;
 
   const avgFailRate =
-    reports.length > 0
+    filteredReports.length > 0
       ? Math.round(
-          reports.reduce((s, r) => s + (r.stats.total > 0 ? (r.stats.failed / r.stats.total) * 100 : 0), 0) /
-            reports.length,
+          filteredReports.reduce((s, r) => s + (r.stats.total > 0 ? (r.stats.failed / r.stats.total) * 100 : 0), 0) /
+            filteredReports.length,
         )
       : 0;
+
+  const minDateVal = reports.length ? toDateInputValue(reportTime(reports[reports.length - 1])) : '';
+  const maxDateVal = reports.length ? toDateInputValue(reportTime(reports[0])) : '';
 
   if (reports.length === 0) {
     return (
@@ -169,9 +330,6 @@ export function TrendsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Trends</h1>
-          <p className="text-slate-600 text-sm mt-0.5">
-            {reports.length} report{reports.length !== 1 ? 's' : ''} tracked
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -194,6 +352,86 @@ export function TrendsPage() {
         />
       )}
 
+      {/* Date range filter — applies to every section below */}
+      <Card className="py-3 px-4">
+        <DateRangeFilter
+          from={dateFrom}
+          to={dateTo}
+          minDate={minDateVal}
+          maxDate={maxDateVal}
+          onChange={(f, t) => {
+            setDateFrom(f);
+            setDateTo(t);
+          }}
+        />
+      </Card>
+
+      {filteredReports.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">
+          <CalendarRange className="h-8 w-8 mx-auto mb-3 opacity-40" />
+          <p className="text-sm">No reports in the selected date range.</p>
+        </div>
+      ) : (
+        <>
+      {/* Latest run snapshot */}
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between flex-wrap gap-2">
+          <h2 className="text-sm font-semibold text-slate-700">
+            Latest Run <span className="text-slate-400 font-normal">— {filteredReports[0].name}</span>
+          </h2>
+          <span className="text-xs text-slate-400">
+            {formatDate(filteredReports[0].startTime ? new Date(filteredReports[0].startTime).toISOString() : filteredReports[0].uploadedAt)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.6fr_1fr]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <KpiStatCard
+              icon={<Layers className="h-5 w-5 text-indigo-600" />}
+              tone="bg-indigo-500/10"
+              label="Total Tests"
+              value={filteredReports[0].stats.total}
+              previous={filteredReports[1]?.stats.total}
+            />
+            <KpiStatCard
+              icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+              tone="bg-emerald-500/10"
+              label="Passed"
+              value={filteredReports[0].stats.passed}
+              previous={filteredReports[1]?.stats.passed}
+            />
+            <KpiStatCard
+              icon={<XCircle className="h-5 w-5 text-red-600" />}
+              tone="bg-red-500/10"
+              label="Failed"
+              value={filteredReports[0].stats.failed}
+              previous={filteredReports[1]?.stats.failed}
+              invert
+            />
+            <KpiStatCard
+              icon={<AlertCircle className="h-5 w-5 text-amber-600" />}
+              tone="bg-amber-500/10"
+              label="Flaky"
+              value={filteredReports[0].stats.flaky}
+              previous={filteredReports[1]?.stats.flaky}
+              invert
+            />
+            <KpiStatCard
+              icon={<SkipForward className="h-5 w-5 text-slate-500" />}
+              tone="bg-slate-500/10"
+              label="Skipped"
+              value={filteredReports[0].stats.skipped}
+              previous={filteredReports[1]?.stats.skipped}
+            />
+          </div>
+
+          <Card>
+            <CardHeader title="Latest Run Status" subtitle="Pass/fail breakdown of the most recent upload" />
+            <StatusDonutChart stats={filteredReports[0].stats} reportId={filteredReports[0].id} />
+          </Card>
+        </div>
+      </div>
+
       {/* Summary metrics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <MetricCard
@@ -209,21 +447,42 @@ export function TrendsPage() {
       </div>
 
       {/* Charts row */}
-      {reports.length > 1 && (
+      {filteredReports.length > 1 && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader
-              title="Test Results by Date"
-              subtitle="Pass/fail distribution across all runs"
-            />
-            <TrendsLineChart reports={reports} />
-          </Card>
-          <DurationTrendChart reports={reports} />
+          <div className="space-y-6">
+            <Card>
+              <CardHeader
+                title="Test Results by Date"
+                subtitle="Pass/fail distribution across all runs"
+              />
+              <TrendsLineChart reports={filteredReports} />
+            </Card>
+            <Card>
+              <CardHeader
+                title="API Automation — Pass Trend"
+                subtitle="Pass rate (%), last 5 runs"
+              />
+              <PassRateLineTrendChart reports={filteredReports} days={5} metric="pass" />
+            </Card>
+          </div>
+          <div className="space-y-6">
+            <DurationTrendChart reports={filteredReports} />
+            <Card>
+              <CardHeader
+                title="API Automation — Fail Trend"
+                subtitle="Fail rate (%), last 5 runs"
+              />
+              <PassRateLineTrendChart reports={filteredReports} days={5} metric="fail" />
+            </Card>
+          </div>
         </div>
       )}
 
       {/* Failures by Folder */}
-      <FailuresByFolderCard reports={fullReports} />
+      <FailuresByFolderCard reports={filteredFullReports} />
+
+      {/* Top Failing Scenarios */}
+      <TopFailuresCard reports={filteredFullReports} />
 
       {/* Report table */}
       <Card>
@@ -250,8 +509,8 @@ export function TrendsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-300/40">
-              {reports.map((r, i) => {
-                const prev = reports[i + 1];
+              {filteredReports.map((r, i) => {
+                const prev = filteredReports[i + 1];
                 return (
                   <tr
                     key={r.id}
@@ -327,6 +586,8 @@ export function TrendsPage() {
           </table>
         </div>
       </Card>
+        </>
+      )}
     </div>
   );
 }

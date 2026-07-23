@@ -21,7 +21,7 @@ export function Navbar() {
             <Activity className="h-4 w-4 text-white" />
           </div>
           <span className="text-base font-bold text-slate-900 tracking-tight">
-            Playwright<span className="text-indigo-500">Analyzer</span>
+            API Automation<span className="text-indigo-500"> Dashboard</span>
           </span>
         </Link>
 
