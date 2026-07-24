@@ -142,7 +142,6 @@ function buildFolderTree(reports: ParsedReport[]): FolderTreeNode[] {
     flattenTests(report.suites).map((t) => {
       const normalized = t.file.replace(/\\/g, '/').replace(/^\.?\//, '');
       const parts = normalized.split('/').filter(Boolean);
-      parts.pop(); // drop the filename, keep directory segments only
       return {
         title: t.title,
         status: t.status as CellStatus,
