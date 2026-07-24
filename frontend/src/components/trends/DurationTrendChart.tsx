@@ -170,7 +170,7 @@ export function DurationTrendChart({ reports }: { reports: ReportSummary[] }) {
         ))}
       </div>
 
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={260}>
         <BarChart
           data={chartData}
           margin={{ top: 8, right: 24, left: 4, bottom: rotate ? 40 : 8 }}

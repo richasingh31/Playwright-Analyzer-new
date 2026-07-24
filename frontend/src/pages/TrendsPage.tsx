@@ -513,35 +513,32 @@ export function TrendsPage() {
         />
       </div>
 
-      {/* Charts row */}
+      {/* Charts row — a true 2x2 grid (not two independently-stacked columns) so cards in
+          the same row always share a height, regardless of each chart's own content height */}
       {filteredReports.length > 1 && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="space-y-6">
-            <Card>
-              <CardHeader
-                title="Test Results by Date"
-                subtitle="Pass/fail distribution across all runs"
-              />
-              <TrendsLineChart reports={filteredReports} />
-            </Card>
-            <Card>
-              <CardHeader
-                title="API Automation — Pass Trend"
-                subtitle="Pass rate (%), last 5 runs"
-              />
-              <PassRateLineTrendChart reports={filteredReports} days={5} metric="pass" />
-            </Card>
-          </div>
-          <div className="space-y-6">
-            <DurationTrendChart reports={filteredReports} />
-            <Card>
-              <CardHeader
-                title="API Automation — Fail Trend"
-                subtitle="Fail rate (%), last 5 runs"
-              />
-              <PassRateLineTrendChart reports={filteredReports} days={5} metric="fail" />
-            </Card>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader
+              title="Test Results by Date"
+              subtitle="Pass/fail distribution across all runs"
+            />
+            <TrendsLineChart reports={filteredReports} />
+          </Card>
+          <DurationTrendChart reports={filteredReports} />
+          <Card>
+            <CardHeader
+              title="API Automation — Pass Trend"
+              subtitle="Pass rate (%), last 5 runs"
+            />
+            <PassRateLineTrendChart reports={filteredReports} days={5} metric="pass" />
+          </Card>
+          <Card>
+            <CardHeader
+              title="API Automation — Fail Trend"
+              subtitle="Fail rate (%), last 5 runs"
+            />
+            <PassRateLineTrendChart reports={filteredReports} days={5} metric="fail" />
+          </Card>
         </div>
       )}
 

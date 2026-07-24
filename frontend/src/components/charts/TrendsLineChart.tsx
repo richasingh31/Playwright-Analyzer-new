@@ -154,7 +154,7 @@ export function TrendsLineChart({ reports }: Props) {
         </span>
       </div>
 
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={260}>
         <BarChart
           data={data}
           margin={{ top: 8, right: 16, left: -12, bottom: angleLabels ? 52 : 8 }}
