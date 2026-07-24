@@ -45,6 +45,21 @@ function toDateInputValue(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
 }
 
+function formatRangeDate(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatRangeLabel(dateFrom: string, dateTo: string): string {
+  if (dateFrom && dateTo) return `${formatRangeDate(dateFrom)} – ${formatRangeDate(dateTo)}`;
+  if (dateFrom) return `Since ${formatRangeDate(dateFrom)}`;
+  if (dateTo) return `Through ${formatRangeDate(dateTo)}`;
+  return 'All Reports';
+}
+
 // ── Mini pass-rate sparkle badge ──────────────────────────────────────────────
 function PassRateBadge({ rate }: { rate: number }) {
   const color =
@@ -332,6 +347,8 @@ export function TrendsPage() {
   const minDateVal = reports.length ? toDateInputValue(reportTime(reports[reports.length - 1])) : '';
   const maxDateVal = reports.length ? toDateInputValue(reportTime(reports[0])) : '';
 
+  const rangeLabel = formatRangeLabel(dateFrom, dateTo);
+
   if (reports.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-6 py-24 animate-fade-in">
@@ -406,21 +423,14 @@ export function TrendsPage() {
         />
       </Card>
 
-      {filteredReports.length === 0 ? (
-        <div className="text-center py-16 text-slate-500">
-          <CalendarRange className="h-8 w-8 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">No reports in the selected date range.</p>
-        </div>
-      ) : (
-        <>
-      {/* Latest run snapshot */}
+      {/* Latest run snapshot — always the true overall latest report, independent of the date filter below */}
       <div className="space-y-3">
         <div className="flex items-baseline justify-between flex-wrap gap-2">
           <h2 className="text-sm font-semibold text-slate-700">
-            Latest Run <span className="text-slate-400 font-normal">— {filteredReports[0].name}</span>
+            Latest Run <span className="text-slate-400 font-normal">— {reports[0].name}</span>
           </h2>
           <span className="text-xs text-slate-400">
-            {formatDate(filteredReports[0].startTime ? new Date(filteredReports[0].startTime).toISOString() : filteredReports[0].uploadedAt)}
+            {formatDate(reports[0].startTime ? new Date(reports[0].startTime).toISOString() : reports[0].uploadedAt)}
           </span>
         </div>
 
@@ -430,59 +440,76 @@ export function TrendsPage() {
               icon={<Layers className="h-5 w-5 text-indigo-600" />}
               tone="bg-indigo-500/10"
               label="Total Tests"
-              value={filteredReports[0].stats.total}
-              previous={filteredReports[1]?.stats.total}
+              value={reports[0].stats.total}
+              previous={reports[1]?.stats.total}
             />
             <KpiStatCard
               icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
               tone="bg-emerald-500/10"
               label="Passed"
-              value={filteredReports[0].stats.passed}
-              previous={filteredReports[1]?.stats.passed}
+              value={reports[0].stats.passed}
+              previous={reports[1]?.stats.passed}
             />
             <KpiStatCard
               icon={<XCircle className="h-5 w-5 text-red-600" />}
               tone="bg-red-500/10"
               label="Failed"
-              value={filteredReports[0].stats.failed}
-              previous={filteredReports[1]?.stats.failed}
+              value={reports[0].stats.failed}
+              previous={reports[1]?.stats.failed}
               invert
             />
             <KpiStatCard
               icon={<AlertCircle className="h-5 w-5 text-amber-600" />}
               tone="bg-amber-500/10"
               label="Flaky"
-              value={filteredReports[0].stats.flaky}
-              previous={filteredReports[1]?.stats.flaky}
+              value={reports[0].stats.flaky}
+              previous={reports[1]?.stats.flaky}
               invert
             />
             <KpiStatCard
               icon={<SkipForward className="h-5 w-5 text-slate-500" />}
               tone="bg-slate-500/10"
               label="Skipped"
-              value={filteredReports[0].stats.skipped}
-              previous={filteredReports[1]?.stats.skipped}
+              value={reports[0].stats.skipped}
+              previous={reports[1]?.stats.skipped}
             />
           </div>
 
           <Card>
             <CardHeader title="Latest Run Status" subtitle="Pass/fail breakdown of the most recent upload" />
-            <StatusDonutChart stats={filteredReports[0].stats} reportId={filteredReports[0].id} />
+            <StatusDonutChart stats={reports[0].stats} reportId={reports[0].id} />
           </Card>
         </div>
       </div>
 
+      {/* Divider marking where the date-range-filtered analysis begins */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+          <CalendarRange className="h-3.5 w-3.5 text-indigo-500" />
+          Analysis for {rangeLabel}
+        </span>
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
+
+      {filteredReports.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">
+          <CalendarRange className="h-8 w-8 mx-auto mb-3 opacity-40" />
+          <p className="text-sm">No reports in the selected date range.</p>
+        </div>
+      ) : (
+        <>
       {/* Summary metrics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <MetricCard
           label="Avg Pass Rate"
           value={`${avgPassRate}%`}
-          sub="across all runs"
+          sub="across selected runs"
         />
         <MetricCard
           label="Avg Fail Rate"
           value={`${avgFailRate}%`}
-          sub="across all runs"
+          sub="across selected runs"
         />
       </div>
 
