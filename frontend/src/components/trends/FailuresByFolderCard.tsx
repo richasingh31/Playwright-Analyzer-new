@@ -127,12 +127,22 @@ function buildFolderNode(
   return { name, fullPath: path, children, ...stats };
 }
 
+// CPQ's specs (postLaborRatesRateOverrides, postOverrides) hit the same
+// estimatingapi endpoints as Estimations — fold it into the same top-level
+// group instead of showing it as its own folder.
+const TOP_FOLDER_ALIASES: Record<string, string> = {
+  CPQ: 'Estimations',
+};
+
 /** Aggregates failures-by-folder across every test execution in the given reports. */
 function buildFolderTree(reports: ParsedReport[]): FolderTreeNode[] {
   const withSegments = reports.flatMap((report) =>
     flattenTests(report.suites).map((t) => {
       const normalized = t.file.replace(/\\/g, '/').replace(/^\.?\//, '');
       const parts = normalized.split('/').filter(Boolean);
+      if (parts.length > 0) {
+        parts[0] = TOP_FOLDER_ALIASES[parts[0]] ?? parts[0];
+      }
       return {
         title: t.title,
         status: t.status as CellStatus,
