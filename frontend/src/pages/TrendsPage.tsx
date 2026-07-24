@@ -15,6 +15,8 @@ import {
   AlertCircle,
   SkipForward,
   CalendarRange,
+  Calendar,
+  Search,
   X,
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
@@ -170,32 +172,70 @@ function DateRangeFilter({
   maxDate: string;
   onChange: (from: string, to: string) => void;
 }) {
+  // Staged locally until "Search" is pressed, so edits to one field don't
+  // re-filter the whole page before the range is actually complete.
+  const [pendingFrom, setPendingFrom] = useState(from);
+  const [pendingTo, setPendingTo] = useState(to);
+
+  useEffect(() => {
+    setPendingFrom(from);
+    setPendingTo(to);
+  }, [from, to]);
+
+  const applyFilter = () => onChange(pendingFrom, pendingTo);
+
+  const clearFilter = () => {
+    setPendingFrom('');
+    setPendingTo('');
+    onChange('', '');
+  };
+
+  const submitOnEnter = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') applyFilter();
+  };
+
   return (
-    <div className="flex items-center gap-2 text-xs flex-wrap">
-      <span className="flex items-center gap-1.5 text-slate-500 font-medium shrink-0">
-        <CalendarRange className="h-3.5 w-3.5" /> Date range
+    <div className="flex items-center gap-3 flex-wrap">
+      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 shrink-0">
+        <CalendarRange className="h-4 w-4" /> Date range
       </span>
-      <input
-        type="date"
-        value={from}
-        min={minDate}
-        max={to || maxDate}
-        onChange={(e) => onChange(e.target.value, to)}
-        className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
-      />
-      <span className="text-slate-400">to</span>
-      <input
-        type="date"
-        value={to}
-        min={from || minDate}
-        max={maxDate}
-        onChange={(e) => onChange(from, e.target.value)}
-        className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-700 focus:outline-none focus:border-indigo-500 transition-colors"
-      />
+
+      <div className="flex items-center rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden transition-colors focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-500/20">
+        <div className="relative">
+          <Calendar className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            type="date"
+            value={pendingFrom}
+            min={minDate}
+            max={pendingTo || maxDate}
+            onChange={(e) => setPendingFrom(e.target.value)}
+            onKeyDown={submitOnEnter}
+            className="bg-transparent py-2 pl-8 pr-2 text-sm text-slate-700 focus:outline-none"
+          />
+        </div>
+        <span className="px-1 text-xs font-medium text-slate-400">to</span>
+        <div className="relative">
+          <Calendar className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            type="date"
+            value={pendingTo}
+            min={pendingFrom || minDate}
+            max={maxDate}
+            onChange={(e) => setPendingTo(e.target.value)}
+            onKeyDown={submitOnEnter}
+            className="bg-transparent py-2 pl-8 pr-3 text-sm text-slate-700 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      <Button size="sm" onClick={applyFilter} icon={<Search className="h-3.5 w-3.5" />}>
+        Search
+      </Button>
+
       {(from || to) && (
         <button
-          onClick={() => onChange('', '')}
-          className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors"
+          onClick={clearFilter}
+          className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
           title="Clear date filter"
         >
           <X className="h-3.5 w-3.5" /> Clear
@@ -353,7 +393,7 @@ export function TrendsPage() {
       )}
 
       {/* Date range filter — applies to every section below */}
-      <Card className="py-3 px-4">
+      <Card className="py-4 px-5">
         <DateRangeFilter
           from={dateFrom}
           to={dateTo}
