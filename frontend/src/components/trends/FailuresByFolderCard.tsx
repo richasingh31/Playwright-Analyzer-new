@@ -317,6 +317,24 @@ function FolderDetailPanel({ node, onClose, showRunLabels }: { node: FolderTreeN
   );
 }
 
+/**
+ * Recharts' nest-type Treemap keeps its drill-down state internally — this
+ * component has no way to know whether the user is viewing the top-level
+ * folders or is drilled into one with far more children. Sizing the
+ * container off `folderTree.length` alone (2 top-level folders) left no room
+ * for a folder's actual children (34 files), so the deepest level of tiles
+ * got clipped. Size for the widest level anywhere in the tree instead.
+ */
+function maxBranchSize(nodes: FolderTreeNode[]): number {
+  let max = nodes.length;
+  for (const node of nodes) {
+    if (node.children?.length) {
+      max = Math.max(max, maxBranchSize(node.children));
+    }
+  }
+  return max;
+}
+
 function FailuresByFoldersTreemap({
   folderTree,
   showRunLabels,
@@ -334,7 +352,9 @@ function FailuresByFoldersTreemap({
     );
   }
 
-  const height = Math.min(480, Math.max(300, folderTree.length * 22 + 260));
+  // +40 offsets recharts reserving ~30px below the chart for the nest
+  // breadcrumb bar while still squarifying tiles against the full height.
+  const height = Math.min(640, Math.max(320, maxBranchSize(folderTree) * 18 + 260)) + 40;
 
   return (
     <div>
