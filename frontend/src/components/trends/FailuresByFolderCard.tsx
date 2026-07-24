@@ -1,10 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, X, XCircle, CalendarRange } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  Treemap,
-  Tooltip as RechartsTooltip,
-} from 'recharts';
+import { CheckCircle2, ChevronRight, X, XCircle, CalendarRange } from 'lucide-react';
 import type { ParsedReport } from '../../types';
 import { flattenTests, formatDate } from '../../utils/helpers';
 import { Card, CardHeader } from '../ui/Card';
@@ -35,10 +30,6 @@ interface FolderTreeNode {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function trunc(s: string, max: number) {
-  return s.length > max ? s.slice(0, max - 1) + '…' : s;
-}
 
 function reportTime(r: ParsedReport): number {
   return r.metadata?.startTime ?? new Date(r.uploadedAt).getTime();
@@ -155,7 +146,7 @@ function buildFolderTree(reports: ParsedReport[]): FolderTreeNode[] {
 
   if (withSegments.length === 0) return [];
 
-  // strip directory segments shared by every test so the treemap starts at the first branch
+  // strip directory segments shared by every test so the grid starts at the first branch
   let commonDepth = 0;
   const maxCommon = Math.min(...withSegments.map((t) => t.segments.length));
   outer: for (let i = 0; i < maxCommon; i++) {
@@ -171,95 +162,32 @@ function buildFolderTree(reports: ParsedReport[]): FolderTreeNode[] {
   return root.children ?? [];
 }
 
-// ── Treemap tile ──────────────────────────────────────────────────────────────
+// ── Folder card ───────────────────────────────────────────────────────────────
+// Every card is the same fixed size regardless of how many tests it represents —
+// test volume is still shown as text, but no longer encoded as tile area. That
+// trade-off is what makes the grid immune to the treemap's clipping problem:
+// there's no pixel-height math to get wrong, the browser just adds rows.
 
-function TreemapTile(props: Record<string, any>) {
-  const { x, y, width, height, name, children, failRate, failed, total, depth } = props;
-  if (x == null || width <= 0 || height <= 0) return null;
-
-  const isBranch = !!(children && children.length);
-  const isRoot = depth === 0;
-  const fill = isRoot ? 'transparent' : folderColor(failRate ?? 0, failed ?? 0);
-  const txt = folderTextColor(fill === 'transparent' ? '#ffffff' : fill);
-  const pad = 10;
-  const showChevron = isBranch && !isRoot && width > 34 && height > 26;
-  const showName = !isRoot && width > 44 && height > 24;
-  const showStats = !isRoot && width > 84 && height > 46;
-
-  const maxChars = Math.max(3, Math.floor((width - pad * 2 - (showChevron ? 16 : 0)) / 6.3));
-  const label = trunc(name ?? '', maxChars);
+function FolderCard({ node, onOpen }: { node: FolderTreeNode; onOpen: (node: FolderTreeNode) => void }) {
+  const isBranch = !!(node.children && node.children.length);
+  const bg = folderColor(node.failRate, node.failed);
+  const txt = folderTextColor(bg);
 
   return (
-    <g style={{ cursor: isRoot ? 'default' : 'pointer' }}>
-      {!isRoot && (
-        <rect
-          x={x + 1.5}
-          y={y + 1.5}
-          width={Math.max(0, width - 3)}
-          height={Math.max(0, height - 3)}
-          rx={7}
-          fill={fill}
-          stroke="#ffffff"
-          strokeWidth={2}
-        />
-      )}
-      {showName && (
-        <text
-          x={x + pad}
-          y={y + (showStats ? 23 : height / 2 + 4)}
-          fontSize={12.5}
-          fontWeight={600}
-          fill={txt}
-        >
-          {label}
-        </text>
-      )}
-      {showStats && (
-        <text x={x + pad} y={y + height - 12} fontSize={11} fill={txt} opacity={0.9}>
-          {failed > 0 ? `${failed}/${total} failing · ${failRate}%` : `${total} passing`}
-        </text>
-      )}
-      {showChevron && (
-        <polyline
-          points={`${x + width - 18},${y + height / 2 - 5} ${x + width - 11},${y + height / 2} ${x + width - 18},${y + height / 2 + 5}`}
-          fill="none"
-          stroke={txt}
-          strokeWidth={1.8}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity={0.75}
-        />
-      )}
-    </g>
-  );
-}
-
-function FolderTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: FolderTreeNode & { children?: unknown[] } }> }) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
-  if (!d || d.total == null) return null;
-  const color = folderColor(d.failRate, d.failed);
-  return (
-    <div className="rounded-xl border border-slate-400 bg-slate-200/95 p-3 shadow-2xl text-xs max-w-[220px]">
-      <p className="font-semibold text-slate-900 mb-2 break-all">{d.name}</p>
-      <div className="space-y-1">
-        <div className="flex justify-between gap-4">
-          <span className="text-slate-600">Fail rate</span>
-          <span className="font-bold" style={{ color }}>{d.failRate}%</span>
-        </div>
-        <div className="flex justify-between gap-4">
-          <span className="text-red-600">Failing</span>
-          <span className="text-red-600 font-medium">{d.failed}</span>
-        </div>
-        <div className="flex justify-between gap-4">
-          <span className="text-slate-600">Total tests</span>
-          <span className="text-slate-700">{d.total}</span>
-        </div>
-      </div>
-      <p className="text-slate-400 mt-2 pt-2 border-t border-slate-400/40">
-        {d.children && d.children.length > 0 ? 'Click to drill in' : 'Click to see failing tests'}
-      </p>
-    </div>
+    <button
+      onClick={() => onOpen(node)}
+      title={isBranch ? `${node.name} — click to open` : `${node.name} — click to see failing tests`}
+      className="flex h-24 flex-col justify-between rounded-xl p-3 text-left shadow-sm ring-1 ring-black/5 transition-transform hover:scale-[1.02] hover:shadow-md"
+      style={{ backgroundColor: bg, color: txt }}
+    >
+      <span className="flex items-start justify-between gap-1">
+        <span className="line-clamp-2 break-all text-xs font-semibold leading-tight">{node.name}</span>
+        {isBranch && <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-75" />}
+      </span>
+      <span className="text-[11px] opacity-90">
+        {node.failed > 0 ? `${node.failed}/${node.total} failing · ${node.failRate}%` : `${node.total} passing`}
+      </span>
+    </button>
   );
 }
 
@@ -317,31 +245,14 @@ function FolderDetailPanel({ node, onClose, showRunLabels }: { node: FolderTreeN
   );
 }
 
-/**
- * Recharts' nest-type Treemap keeps its drill-down state internally — this
- * component has no way to know whether the user is viewing the top-level
- * folders or is drilled into one with far more children. Sizing the
- * container off `folderTree.length` alone (2 top-level folders) left no room
- * for a folder's actual children (34 files), so the deepest level of tiles
- * got clipped. Size for the widest level anywhere in the tree instead.
- */
-function maxBranchSize(nodes: FolderTreeNode[]): number {
-  let max = nodes.length;
-  for (const node of nodes) {
-    if (node.children?.length) {
-      max = Math.max(max, maxBranchSize(node.children));
-    }
-  }
-  return max;
-}
-
-function FailuresByFoldersTreemap({
+function FailuresByFolderGrid({
   folderTree,
   showRunLabels,
 }: {
   folderTree: FolderTreeNode[];
   showRunLabels: boolean;
 }) {
+  const [path, setPath] = useState<FolderTreeNode[]>([]);
   const [selectedLeaf, setSelectedLeaf] = useState<FolderTreeNode | null>(null);
 
   if (folderTree.length === 0) {
@@ -352,9 +263,17 @@ function FailuresByFoldersTreemap({
     );
   }
 
-  // +40 offsets recharts reserving ~30px below the chart for the nest
-  // breadcrumb bar while still squarifying tiles against the full height.
-  const height = Math.min(640, Math.max(320, maxBranchSize(folderTree) * 18 + 260)) + 40;
+  const current = path.length > 0 ? path[path.length - 1].children ?? [] : folderTree;
+  const visible = [...current].sort((a, b) => b.failed - a.failed || b.total - a.total);
+
+  const openNode = (node: FolderTreeNode) => {
+    if (node.children && node.children.length > 0) {
+      setPath((p) => [...p, node]);
+      setSelectedLeaf(null);
+    } else {
+      setSelectedLeaf(node);
+    }
+  };
 
   return (
     <div>
@@ -376,40 +295,35 @@ function FailuresByFoldersTreemap({
         </span>
       </div>
 
-      <div className="treemap-breadcrumb">
-        <style>{`
-          .treemap-breadcrumb .recharts-treemap-nest-index-wrapper {
-            display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
-            margin-top: 10px !important; text-align: left !important;
-          }
-          .treemap-breadcrumb .recharts-treemap-nest-index-box {
-            background: #f1f5f9 !important; color: #475569 !important;
-            padding: 3px 10px !important; border-radius: 9999px !important;
-            font-size: 11px !important; font-weight: 500 !important;
-            margin-right: 0 !important; transition: background 0.15s;
-          }
-          .treemap-breadcrumb .recharts-treemap-nest-index-box:hover { background: #e2e8f0 !important; }
-          .treemap-breadcrumb .recharts-treemap-nest-index-box:last-child {
-            background: #1e293b !important; color: #fff !important; cursor: default;
-          }
-        `}</style>
-        <ResponsiveContainer width="100%" height={height}>
-          <Treemap
-            data={folderTree}
-            dataKey="size"
-            nameKey="name"
-            type="nest"
-            aspectRatio={4 / 3}
-            isAnimationActive={false}
-            content={<TreemapTile />}
-            nestIndexContent={(item: any) => item?.name ?? 'All folders'}
-            onClick={(node: any) => {
-              setSelectedLeaf(!node.children || !node.children.length ? node : null);
-            }}
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1.5 flex-wrap mb-3">
+        <button
+          onClick={() => { setPath([]); setSelectedLeaf(null); }}
+          className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            path.length === 0 ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          All folders
+        </button>
+        {path.map((node, i) => (
+          <button
+            key={node.fullPath || node.name}
+            onClick={() => { setPath(path.slice(0, i + 1)); setSelectedLeaf(null); }}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              i === path.length - 1 ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
           >
-            <RechartsTooltip content={<FolderTooltip />} />
-          </Treemap>
-        </ResponsiveContainer>
+            {node.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Uniform grid — every card is the same size; the grid just wraps onto as
+          many rows as needed, so nothing is ever clipped. */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        {visible.map((node) => (
+          <FolderCard key={node.fullPath || node.name} node={node} onOpen={openNode} />
+        ))}
       </div>
 
       {selectedLeaf && (
@@ -506,8 +420,8 @@ export function FailuresByFolderCard({ reports }: { reports: ParsedReport[] }) {
         title="Failures by Folder"
         subtitle={
           from || to
-            ? `${filtered.length} of ${reports.length} reports · size is test volume, color is fail rate`
-            : `Aggregated across all ${reports.length} report${reports.length !== 1 ? 's' : ''} — size is test volume, color is fail rate`
+            ? `${filtered.length} of ${reports.length} reports · color is fail rate`
+            : `Aggregated across all ${reports.length} report${reports.length !== 1 ? 's' : ''} — color is fail rate`
         }
         action={
           <DateRangeFilter
@@ -519,7 +433,7 @@ export function FailuresByFolderCard({ reports }: { reports: ParsedReport[] }) {
           />
         }
       />
-      <FailuresByFoldersTreemap folderTree={folderTree} showRunLabels={showRunLabels} />
+      <FailuresByFolderGrid folderTree={folderTree} showRunLabels={showRunLabels} />
     </Card>
   );
 }
