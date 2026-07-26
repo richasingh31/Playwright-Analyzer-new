@@ -1,17 +1,17 @@
-import sql from 'mssql';
+// Windows Authentication (Trusted Connection) has no concept on tedious (mssql's
+// default driver) — it requires the native msnodesqlv8 driver instead. Every mssql
+// import in this codebase must come from 'mssql/msnodesqlv8' consistently, or a
+// `connection.on is not a function` error is thrown at runtime.
+import sql from 'mssql/msnodesqlv8';
 
 let poolPromise: Promise<sql.ConnectionPool> | null = null;
 
 const config: sql.config = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
   server: process.env.DB_SERVER ?? 'localhost',
   port: process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined,
   database: process.env.DB_NAME,
   options: {
-    trustServerCertificate: true,
-    encrypt: false,
-    enableArithAbort: true,
+    trustedConnection: true,
   },
   pool: {
     max: 10,

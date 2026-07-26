@@ -1,4 +1,4 @@
-import sql from 'mssql';
+import sql from 'mssql/msnodesqlv8';
 import type { ParsedReport, ReportSummary } from '../types/report.types';
 import type { IReportRepository } from './store';
 import { getPool } from './db';

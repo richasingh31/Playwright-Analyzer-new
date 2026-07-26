@@ -54,13 +54,16 @@ async function start() {
   } catch (err) {
     console.error(
       '\n❌  Could not connect to SQL Server / run migrations.\n' +
-        `   Check DB_SERVER/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD in backend/.env, and that:\n` +
+        `   Check DB_SERVER/DB_PORT/DB_NAME in backend/.env, and that:\n` +
         '   - SQL Server\'s TCP/IP protocol is enabled (SQL Server Configuration Manager →\n' +
         '     SQL Server Network Configuration → Protocols → TCP/IP → Enabled) with a\n' +
         '     known static port under TCP/IP Properties → IP Addresses → IPAll → TCP Port\n' +
         '   - the SQL Server service has been restarted after that change\n' +
         '   - Windows Firewall allows inbound connections on that port\n' +
-        '   - the SQL login has access to the target database\n',
+        '   - this is running under a Windows account that has access to the target\n' +
+        '     database (Windows Authentication / Trusted Connection — no DB_USER/DB_PASSWORD)\n' +
+        '   - the msnodesqlv8 native module installed correctly (npm install must be run\n' +
+        '     on this same Windows machine — it will not work with a copied node_modules)\n',
     );
     console.error(err);
     process.exit(1);
