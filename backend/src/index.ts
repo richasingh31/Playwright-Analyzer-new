@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import util from 'node:util';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -65,7 +66,7 @@ async function start() {
         '   - the msnodesqlv8 native module installed correctly (npm install must be run\n' +
         '     on this same Windows machine — it will not work with a copied node_modules)\n',
     );
-    console.error(err);
+    console.error(util.inspect(err, { depth: null, showHidden: true }));
     process.exit(1);
   }
 
