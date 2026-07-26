@@ -1,4 +1,5 @@
 import type { ParsedReport, ReportSummary } from '../types/report.types';
+import { SqlServerReportRepository } from './sql-server.store';
 
 /**
  * Repository interface — implement this against your database when ready.
@@ -51,4 +52,4 @@ class InMemoryReportRepository implements IReportRepository {
   }
 }
 
-export const reportRepository: IReportRepository = new InMemoryReportRepository();
+export const reportRepository: IReportRepository = new SqlServerReportRepository();
