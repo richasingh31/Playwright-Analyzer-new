@@ -10,6 +10,12 @@ const config: sql.config = {
   server: process.env.DB_SERVER ?? 'localhost',
   port: process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined,
   database: process.env.DB_NAME,
+  // msnodesqlv8 defaults to the ODBC driver name "SQL Server Native Client 11.0" on
+  // Windows, which most modern installs don't have registered (they have "ODBC
+  // Driver 17/18 for SQL Server" instead) — causing "Data source name not found".
+  // Must match a driver name actually installed; check with:
+  //   Get-OdbcDriver | Where-Object { $_.Name -like "*SQL Server*" }
+  driver: process.env.DB_ODBC_DRIVER ?? 'ODBC Driver 17 for SQL Server',
   options: {
     trustedConnection: true,
   },
