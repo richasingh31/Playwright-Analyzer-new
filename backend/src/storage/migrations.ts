@@ -1,6 +1,7 @@
-import { getPool } from './db';
+import { getPool, ensureDatabaseExists } from './db';
 
 export async function runMigrations(): Promise<void> {
+  await ensureDatabaseExists();
   const pool = await getPool();
   await pool.request().query(`
     IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='reports' AND xtype='U')
@@ -21,6 +22,15 @@ export async function runMigrations(): Promise<void> {
       full_data           NVARCHAR(MAX)  NOT NULL,
       CONSTRAINT UQ_reports_content_hash UNIQUE (content_hash)
     )
+  `);
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('reports') AND name = 'content_hash')
+    BEGIN
+      ALTER TABLE reports ADD content_hash CHAR(64) NULL
+      EXEC('UPDATE reports SET content_hash = CONVERT(CHAR(64), HASHBYTES(''SHA2_256'', CONVERT(NVARCHAR(MAX), id)), 2) WHERE content_hash IS NULL')
+      ALTER TABLE reports ALTER COLUMN content_hash CHAR(64) NOT NULL
+      ALTER TABLE reports ADD CONSTRAINT UQ_reports_content_hash UNIQUE (content_hash)
+    END
   `);
   console.log('Database migrations complete.');
 }

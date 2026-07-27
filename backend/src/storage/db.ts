@@ -6,9 +6,19 @@ import sql from 'mssql/msnodesqlv8';
 
 let poolPromise: Promise<sql.ConnectionPool> | null = null;
 
+// A named SQL Server instance (e.g. SQL Server Express, installed as
+// "SQLEXPRESS") does NOT listen on the fixed TCP port 1433 — it uses a dynamic
+// port that the SQL Server Browser service resolves from the instance name.
+// Prefer connecting via DB_INSTANCE; only fall back to a fixed DB_PORT when no
+// instance name is configured (i.e. a default instance).
+const instanceName = process.env.DB_INSTANCE || undefined;
+
 const config: sql.config = {
   server: process.env.DB_SERVER ?? 'localhost',
-  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined,
+  port:
+    !instanceName && process.env.DB_PORT
+      ? Number(process.env.DB_PORT)
+      : undefined,
   database: process.env.DB_NAME,
   // msnodesqlv8 defaults to the ODBC driver name "SQL Server Native Client 11.0" on
   // Windows, which most modern installs don't have registered (they have "ODBC
@@ -18,6 +28,7 @@ const config: sql.config = {
   driver: process.env.DB_ODBC_DRIVER ?? 'ODBC Driver 17 for SQL Server',
   options: {
     trustedConnection: true,
+    ...(instanceName ? { instanceName } : {}),
   },
   pool: {
     max: 10,
@@ -40,4 +51,28 @@ export function getPool(): Promise<sql.ConnectionPool> {
     });
   }
   return poolPromise;
+}
+
+// The target database may not exist yet on a fresh SQL Server install — the
+// migrations connect straight to DB_NAME and would fail with error 4060
+// ("Cannot open database ... requested by the login"). Connect to the always-
+// present `master` database first and create the target database if needed.
+export async function ensureDatabaseExists(): Promise<void> {
+  const dbName = config.database;
+  if (!dbName) {
+    throw new Error('DB_NAME is not set in backend/.env');
+  }
+
+  const masterConfig: sql.config = { ...config, database: 'master' };
+  const masterPool = await new sql.ConnectionPool(masterConfig).connect();
+  try {
+    await masterPool
+      .request()
+      .input('name', sql.NVarChar, dbName)
+      .query(
+        `IF DB_ID(@name) IS NULL EXEC('CREATE DATABASE [' + @name + ']')`,
+      );
+  } finally {
+    await masterPool.close();
+  }
 }
