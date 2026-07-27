@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
 import type { ParsedReport, TestResult, TestSuite, TestStatus } from '../types';
-import { formatDate } from '../utils/helpers';
+import { formatDate, classifyReportKind } from '../utils/helpers';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
@@ -478,7 +478,7 @@ export function ApiScenariosPage() {
     return reportsApi
       .getAll()
       .then((summaries) => Promise.all(summaries.map((s) => reportsApi.getById(s.id))))
-      .then(setReports)
+      .then((full) => setReports(full.filter((r) => classifyReportKind(r) !== 'ui')))
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   };

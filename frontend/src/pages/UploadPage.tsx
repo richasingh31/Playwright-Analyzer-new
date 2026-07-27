@@ -102,8 +102,8 @@ export function UploadPage() {
     setError('');
     setDuplicateId(null);
     try {
-      const { id } = await reportsApi.upload(file, setProgress);
-      navigate(`/analysis/${id}`);
+      await reportsApi.upload(file, setProgress);
+      navigate('/trends');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
       if (err instanceof ApiError && err.status === 409 && err.existingId) {

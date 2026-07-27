@@ -274,7 +274,14 @@ function FailuresByFolderGrid({
   }
 
   const current = path.length > 0 ? path[path.length - 1].children ?? [] : folderTree;
-  const visible = [...current].sort((a, b) => b.failed - a.failed || b.total - a.total);
+  // Color-ordered: darkest red (highest fail rate) first, down through light red,
+  // with perfectly healthy (green) folders always last regardless of test volume.
+  const visible = [...current].sort((a, b) => {
+    if (a.failed === 0 && b.failed === 0) return b.total - a.total;
+    if (a.failed === 0) return 1;
+    if (b.failed === 0) return -1;
+    return b.failRate - a.failRate || b.failed - a.failed;
+  });
 
   const openNode = (node: FolderTreeNode) => {
     if (node.children && node.children.length > 0) {
@@ -288,21 +295,23 @@ function FailuresByFolderGrid({
   return (
     <div>
       {/* Legend */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <span className="text-xs text-slate-500 shrink-0">Fail rate</span>
-        <div className="w-full max-w-[220px]">
-          <div className="flex justify-between text-[10px] text-slate-400 mb-1 font-mono">
-            <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
+      <div className="flex justify-end mb-4">
+        <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 flex-wrap">
+          <span className="text-xs font-semibold text-slate-500 shrink-0">Fail Rate</span>
+          <div className="w-full max-w-[200px]">
+            <div
+              className="h-2.5 rounded-full shadow-inner ring-1 ring-black/5"
+              style={{ background: 'linear-gradient(to right, #7f1d1d, #b91c1c, #ef4444, #f87171, #fecaca)' }}
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+              <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
+            </div>
           </div>
-          <div
-            className="h-2 rounded-full"
-            style={{ background: 'linear-gradient(to right, #7f1d1d, #b91c1c, #ef4444, #f87171, #fecaca)' }}
-          />
+          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 pl-3 border-l border-slate-200 shrink-0">
+            <span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-emerald-100" style={{ backgroundColor: '#10b981' }} />
+            No failures
+          </span>
         </div>
-        <span className="flex items-center gap-1.5 text-xs text-slate-500 ml-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#10b981' }} />
-          No failures
-        </span>
       </div>
 
       {/* Breadcrumb */}
@@ -347,6 +356,36 @@ function FailuresByFolderGrid({
   );
 }
 
+// ── Date dropdown ────────────────────────────────────────────────────────────
+
+function ReportDateSelect({
+  reports,
+  value,
+  onChange,
+}: {
+  reports: ParsedReport[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <CalendarRange className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-slate-700"
+      >
+        <option value="">All dates</option>
+        {reports.map((r) => (
+          <option key={r.id} value={r.id}>
+            {reportShortDate(r)} — {r.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 // ── Date range filter ─────────────────────────────────────────────────────────
 
 function DateRangeFilter({
@@ -364,7 +403,6 @@ function DateRangeFilter({
 }) {
   return (
     <div className="flex items-center gap-2 text-xs">
-      <CalendarRange className="h-3.5 w-3.5 text-slate-400 shrink-0" />
       <input
         type="date"
         value={from}
@@ -386,7 +424,7 @@ function DateRangeFilter({
         <button
           onClick={() => onChange('', '')}
           className="text-slate-400 hover:text-slate-600 transition-colors"
-          title="Clear date filter"
+          title="Clear date range"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -398,49 +436,69 @@ function DateRangeFilter({
 // ── Page-level card ───────────────────────────────────────────────────────────
 
 export function FailuresByFolderCard({ reports }: { reports: ParsedReport[] }) {
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [selectedId, setSelectedId] = useState('');
+  const [rangeFrom, setRangeFrom] = useState('');
+  const [rangeTo, setRangeTo] = useState('');
 
   const sorted = useMemo(
     () => [...reports].sort((a, b) => reportTime(a) - reportTime(b)),
     [reports],
   );
 
+  // Newest first in the dropdown, oldest-first order is only needed internally.
+  const dropdownReports = useMemo(() => [...sorted].reverse(), [sorted]);
+
   const minDate = sorted.length ? toDateInputValue(reportTime(sorted[0])) : '';
   const maxDate = sorted.length ? toDateInputValue(reportTime(sorted[sorted.length - 1])) : '';
 
+  const hasRange = !!(rangeFrom || rangeTo);
+
   const filtered = useMemo(() => {
-    if (!from && !to) return sorted;
-    const fromTs = from ? new Date(`${from}T00:00:00`).getTime() : -Infinity;
-    const toTs = to ? new Date(`${to}T23:59:59.999`).getTime() : Infinity;
-    return sorted.filter((r) => {
-      const t = reportTime(r);
-      return t >= fromTs && t <= toTs;
-    });
-  }, [sorted, from, to]);
+    if (hasRange) {
+      const fromTs = rangeFrom ? new Date(`${rangeFrom}T00:00:00`).getTime() : -Infinity;
+      const toTs = rangeTo ? new Date(`${rangeTo}T23:59:59.999`).getTime() : Infinity;
+      return sorted.filter((r) => {
+        const t = reportTime(r);
+        return t >= fromTs && t <= toTs;
+      });
+    }
+    if (selectedId) return sorted.filter((r) => r.id === selectedId);
+    return sorted;
+  }, [sorted, selectedId, hasRange, rangeFrom, rangeTo]);
 
   const folderTree = useMemo(() => buildFolderTree(filtered), [filtered]);
   const showRunLabels = filtered.length > 1;
+
+  const selectReport = (id: string) => {
+    setSelectedId(id);
+    if (id) { setRangeFrom(''); setRangeTo(''); }
+  };
+
+  const selectRange = (from: string, to: string) => {
+    setRangeFrom(from);
+    setRangeTo(to);
+    if (from || to) setSelectedId('');
+  };
 
   if (reports.length === 0) return null;
 
   return (
     <Card>
       <CardHeader
-        title="Failures by Folder"
+        title="API Test Results Heatmap"
         subtitle={
-          from || to
+          hasRange
             ? `${filtered.length} of ${reports.length} reports · color is fail rate`
+            : selectedId
+            ? `Showing 1 of ${reports.length} reports · color is fail rate`
             : `Aggregated across all ${reports.length} report${reports.length !== 1 ? 's' : ''} — color is fail rate`
         }
         action={
-          <DateRangeFilter
-            from={from}
-            to={to}
-            minDate={minDate}
-            maxDate={maxDate}
-            onChange={(f, t) => { setFrom(f); setTo(t); }}
-          />
+          <div className="flex items-center gap-3 flex-wrap">
+            <ReportDateSelect reports={dropdownReports} value={selectedId} onChange={selectReport} />
+            <span className="text-slate-300 text-xs">|</span>
+            <DateRangeFilter from={rangeFrom} to={rangeTo} minDate={minDate} maxDate={maxDate} onChange={selectRange} />
+          </div>
         }
       />
       <FailuresByFolderGrid folderTree={folderTree} showRunLabels={showRunLabels} />

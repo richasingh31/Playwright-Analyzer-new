@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
 import type { ParsedReport, ReportSummary } from '../types';
-import { formatDuration, formatDate } from '../utils/helpers';
+import { formatDuration, formatDate, classifyReportKind } from '../utils/helpers';
 import { TrendsLineChart } from '../components/charts/TrendsLineChart';
 import { StatusDonutChart } from '../components/charts/StatusDonutChart';
 import { PassRateLineTrendChart } from '../components/charts/PassRateLineTrendChart';
@@ -210,14 +210,14 @@ function DateRangeFilter({
   };
 
   return (
-    <div className="flex items-center gap-3 flex-wrap">
-      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 shrink-0">
-        <CalendarRange className="h-4 w-4" /> Date range
+    <div className="flex flex-wrap items-center justify-center gap-3">
+      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-indigo-600">
+        <CalendarRange className="h-4 w-4" /> Date Range
       </span>
 
-      <div className="flex items-center rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden transition-colors focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-500/20">
+      <div className="flex items-center rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white shadow-sm overflow-hidden transition-all duration-150 hover:shadow-md focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-500/15">
         <div className="relative">
-          <Calendar className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <Calendar className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-indigo-400" />
           <input
             type="date"
             value={pendingFrom}
@@ -225,12 +225,12 @@ function DateRangeFilter({
             max={pendingTo || maxDate}
             onChange={(e) => setPendingFrom(e.target.value)}
             onKeyDown={submitOnEnter}
-            className="bg-transparent py-2 pl-8 pr-2 text-sm text-slate-700 focus:outline-none"
+            className="bg-transparent py-2.5 pl-9 pr-2 text-sm font-medium text-slate-700 focus:outline-none"
           />
         </div>
-        <span className="px-1 text-xs font-medium text-slate-400">to</span>
+        <span className="px-1 text-sm font-bold text-indigo-300">→</span>
         <div className="relative">
-          <Calendar className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <Calendar className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-indigo-400" />
           <input
             type="date"
             value={pendingTo}
@@ -238,7 +238,7 @@ function DateRangeFilter({
             max={maxDate}
             onChange={(e) => setPendingTo(e.target.value)}
             onKeyDown={submitOnEnter}
-            className="bg-transparent py-2 pl-8 pr-3 text-sm text-slate-700 focus:outline-none"
+            className="bg-transparent py-2.5 pl-9 pr-3 text-sm font-medium text-slate-700 focus:outline-none"
           />
         </div>
       </div>
@@ -250,7 +250,7 @@ function DateRangeFilter({
       {(from || to) && (
         <button
           onClick={clearFilter}
-          className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          className="flex items-center gap-1 rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-100 hover:text-red-600"
           title="Clear date filter"
         >
           <X className="h-3.5 w-3.5" /> Clear
@@ -306,27 +306,50 @@ export function TrendsPage() {
     }
   };
 
+  // UI-test reports (EstimationAI) are only ever shown in the "UI Test" card and
+  // their own analysis page — every other section of the dashboard works off the
+  // API-only subset below.
+  const apiFullReports = useMemo(
+    () => fullReports.filter((r) => classifyReportKind(r) !== 'ui'),
+    [fullReports],
+  );
+  const apiReports = useMemo(() => {
+    const apiIds = new Set(apiFullReports.map((r) => r.id));
+    return reports.filter((r) => apiIds.has(r.id));
+  }, [reports, apiFullReports]);
+
   // Date-range filter applied across every section of the page. Computed with useMemo
   // (rather than after the loading/error guards below) so hook order stays stable.
   const filteredReports = useMemo(() => {
-    if (!dateFrom && !dateTo) return reports;
+    if (!dateFrom && !dateTo) return apiReports;
     const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : -Infinity;
     const toTs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : Infinity;
-    return reports.filter((r) => {
+    return apiReports.filter((r) => {
       const t = reportTime(r);
       return t >= fromTs && t <= toTs;
     });
-  }, [reports, dateFrom, dateTo]);
+  }, [apiReports, dateFrom, dateTo]);
 
   const filteredFullReports = useMemo(() => {
-    if (!dateFrom && !dateTo) return fullReports;
+    if (!dateFrom && !dateTo) return apiFullReports;
     const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : -Infinity;
     const toTs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : Infinity;
-    return fullReports.filter((r) => {
+    return apiFullReports.filter((r) => {
       const t = fullReportTime(r);
       return t >= fromTs && t <= toTs;
     });
-  }, [fullReports, dateFrom, dateTo]);
+  }, [apiFullReports, dateFrom, dateTo]);
+
+  const latestApiReport = useMemo(() => {
+    return apiReports.length > 0 ? { summary: apiReports[0], full: apiFullReports[0] } : undefined;
+  }, [apiReports, apiFullReports]);
+
+  // The UI card is the one exception — it looks at the true latest report of
+  // every kind, not the API-only subset.
+  const latestUiReport = useMemo(() => {
+    const idx = fullReports.findIndex((r) => classifyReportKind(r) === 'ui');
+    return idx >= 0 ? { summary: reports[idx], full: fullReports[idx] } : undefined;
+  }, [reports, fullReports]);
 
   if (loading) return <FullPageSpinner label="Loading trends…" />;
   if (error) return <ErrorState message={error} />;
@@ -344,8 +367,8 @@ export function TrendsPage() {
         )
       : 0;
 
-  const minDateVal = reports.length ? toDateInputValue(reportTime(reports[reports.length - 1])) : '';
-  const maxDateVal = reports.length ? toDateInputValue(reportTime(reports[0])) : '';
+  const minDateVal = apiReports.length ? toDateInputValue(reportTime(apiReports[apiReports.length - 1])) : '';
+  const maxDateVal = apiReports.length ? toDateInputValue(reportTime(apiReports[0])) : '';
 
   const rangeLabel = formatRangeLabel(dateFrom, dateTo);
 
@@ -409,8 +432,109 @@ export function TrendsPage() {
         />
       )}
 
+      {/* Latest run snapshot — API vs UI test breakdown, independent of the date filter below */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700">Latest Run</h2>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Card>
+            <CardHeader
+              title="API Tests"
+              subtitle={latestApiReport ? latestApiReport.summary.name : 'No API test reports yet'}
+              action={
+                latestApiReport ? (
+                  <span className="text-xs text-slate-400">
+                    {formatDate(
+                      latestApiReport.summary.startTime
+                        ? new Date(latestApiReport.summary.startTime).toISOString()
+                        : latestApiReport.summary.uploadedAt,
+                    )}
+                  </span>
+                ) : undefined
+              }
+            />
+            {latestApiReport ? (
+              <StatusDonutChart stats={latestApiReport.summary.stats} reportId={latestApiReport.summary.id} />
+            ) : (
+              <p className="text-center text-sm text-slate-500 py-16">No API test reports uploaded yet.</p>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="UI Test"
+              subtitle={latestUiReport ? latestUiReport.summary.name : 'No UI test reports yet'}
+              action={
+                latestUiReport ? (
+                  <span className="text-xs text-slate-400">
+                    {formatDate(
+                      latestUiReport.summary.startTime
+                        ? new Date(latestUiReport.summary.startTime).toISOString()
+                        : latestUiReport.summary.uploadedAt,
+                    )}
+                  </span>
+                ) : undefined
+              }
+            />
+            {latestUiReport ? (
+              <StatusDonutChart stats={latestUiReport.summary.stats} reportId={latestUiReport.summary.id} />
+            ) : (
+              <p className="text-center text-sm text-slate-500 py-16">No UI test reports uploaded yet.</p>
+            )}
+          </Card>
+
+          <div className="grid grid-cols-1 gap-3">
+            {apiReports.length > 0 ? (
+              <>
+                <KpiStatCard
+                  icon={<Layers className="h-5 w-5 text-indigo-600" />}
+                  tone="bg-indigo-500/10"
+                  label="Total Tests"
+                  value={apiReports[0].stats.total}
+                  previous={apiReports[1]?.stats.total}
+                />
+                <KpiStatCard
+                  icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+                  tone="bg-emerald-500/10"
+                  label="Passed"
+                  value={apiReports[0].stats.passed}
+                  previous={apiReports[1]?.stats.passed}
+                />
+                <KpiStatCard
+                  icon={<XCircle className="h-5 w-5 text-red-600" />}
+                  tone="bg-red-500/10"
+                  label="Failed"
+                  value={apiReports[0].stats.failed}
+                  previous={apiReports[1]?.stats.failed}
+                  invert
+                />
+                <KpiStatCard
+                  icon={<AlertCircle className="h-5 w-5 text-amber-600" />}
+                  tone="bg-amber-500/10"
+                  label="Flaky"
+                  value={apiReports[0].stats.flaky}
+                  previous={apiReports[1]?.stats.flaky}
+                  invert
+                />
+                <KpiStatCard
+                  icon={<SkipForward className="h-5 w-5 text-slate-500" />}
+                  tone="bg-slate-500/10"
+                  label="Skipped"
+                  value={apiReports[0].stats.skipped}
+                  previous={apiReports[1]?.stats.skipped}
+                />
+              </>
+            ) : (
+              <Card className="flex items-center justify-center py-16">
+                <p className="text-center text-sm text-slate-500">No API test reports uploaded yet.</p>
+              </Card>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Date range filter — applies to every section below */}
-      <Card className="py-4 px-5">
+      <Card className="py-5 px-5">
         <DateRangeFilter
           from={dateFrom}
           to={dateTo}
@@ -422,65 +546,6 @@ export function TrendsPage() {
           }}
         />
       </Card>
-
-      {/* Latest run snapshot — always the true overall latest report, independent of the date filter below */}
-      <div className="space-y-3">
-        <div className="flex items-baseline justify-between flex-wrap gap-2">
-          <h2 className="text-sm font-semibold text-slate-700">
-            Latest Run <span className="text-slate-400 font-normal">— {reports[0].name}</span>
-          </h2>
-          <span className="text-xs text-slate-400">
-            {formatDate(reports[0].startTime ? new Date(reports[0].startTime).toISOString() : reports[0].uploadedAt)}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.6fr_1fr]">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <KpiStatCard
-              icon={<Layers className="h-5 w-5 text-indigo-600" />}
-              tone="bg-indigo-500/10"
-              label="Total Tests"
-              value={reports[0].stats.total}
-              previous={reports[1]?.stats.total}
-            />
-            <KpiStatCard
-              icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
-              tone="bg-emerald-500/10"
-              label="Passed"
-              value={reports[0].stats.passed}
-              previous={reports[1]?.stats.passed}
-            />
-            <KpiStatCard
-              icon={<XCircle className="h-5 w-5 text-red-600" />}
-              tone="bg-red-500/10"
-              label="Failed"
-              value={reports[0].stats.failed}
-              previous={reports[1]?.stats.failed}
-              invert
-            />
-            <KpiStatCard
-              icon={<AlertCircle className="h-5 w-5 text-amber-600" />}
-              tone="bg-amber-500/10"
-              label="Flaky"
-              value={reports[0].stats.flaky}
-              previous={reports[1]?.stats.flaky}
-              invert
-            />
-            <KpiStatCard
-              icon={<SkipForward className="h-5 w-5 text-slate-500" />}
-              tone="bg-slate-500/10"
-              label="Skipped"
-              value={reports[0].stats.skipped}
-              previous={reports[1]?.stats.skipped}
-            />
-          </div>
-
-          <Card>
-            <CardHeader title="Latest Run Status" subtitle="Pass/fail breakdown of the most recent upload" />
-            <StatusDonutChart stats={reports[0].stats} reportId={reports[0].id} />
-          </Card>
-        </div>
-      </div>
 
       {/* Divider marking where the date-range-filtered analysis begins */}
       <div className="flex items-center gap-3 pt-2">

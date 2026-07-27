@@ -83,3 +83,33 @@ export function flattenTests(
 ): import('../types').TestResult[] {
   return suites.flatMap((s) => [...s.tests, ...flattenTests(s.suites ?? [])]);
 }
+
+/**
+ * Classifies a report as 'ui' or 'api' by its dominant top-level test folder —
+ * reports whose tests mostly live under an "EstimationAI" folder are UI-test
+ * runs, everything else (CPQ, Estimations, ...) is an API-test run.
+ */
+export function classifyReportKind(
+  report: import('../types').ParsedReport,
+): 'ui' | 'api' {
+  const tests = flattenTests(report.suites);
+  if (tests.length === 0) return 'api';
+
+  const topFolderCounts = new Map<string, number>();
+  for (const t of tests) {
+    const normalized = t.file.replace(/\\/g, '/').replace(/^\.?\//, '');
+    const top = normalized.split('/')[0] ?? '';
+    topFolderCounts.set(top, (topFolderCounts.get(top) ?? 0) + 1);
+  }
+
+  let dominant = '';
+  let max = -1;
+  topFolderCounts.forEach((count, folder) => {
+    if (count > max) {
+      max = count;
+      dominant = folder;
+    }
+  });
+
+  return dominant.toLowerCase() === 'estimationai' ? 'ui' : 'api';
+}

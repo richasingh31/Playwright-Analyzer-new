@@ -21,7 +21,7 @@ import { Card } from '../components/ui/Card';
 import { TenantStatusPieChart } from '../components/charts/TenantStatusPieChart';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
-import { formatDuration } from '../utils/helpers';
+import { formatDuration, classifyReportKind } from '../utils/helpers';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -562,7 +562,7 @@ export function TenantComparisonPage() {
       try {
         const summaries = await reportsApi.getAll();
         const all = await Promise.all(summaries.map((s) => reportsApi.getById(s.id)));
-        setReports(all);
+        setReports(all.filter((r) => classifyReportKind(r) !== 'ui'));
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to load reports');
       } finally {

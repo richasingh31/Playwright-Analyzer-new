@@ -24,7 +24,7 @@ import {
 } from 'recharts';
 import { reportsApi } from '../api/client';
 import type { ParsedReport } from '../types';
-import { flattenTests, formatDate } from '../utils/helpers';
+import { flattenTests, formatDate, classifyReportKind } from '../utils/helpers';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
@@ -547,7 +547,7 @@ export function FailurePatternsPage() {
     return reportsApi
       .getAll()
       .then((summaries) => Promise.all(summaries.map((s) => reportsApi.getById(s.id))))
-      .then(setReports)
+      .then((full) => setReports(full.filter((r) => classifyReportKind(r) !== 'ui')))
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -613,7 +613,7 @@ export function FailurePatternsPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Failure Patterns</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Analysis</h1>
           <p className="text-slate-600 text-sm mt-0.5">
             Cross-run analysis across {reports.length} report{reports.length !== 1 ? 's' : ''}
           </p>
