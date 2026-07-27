@@ -14,6 +14,8 @@ import { STATUS_CONFIG, formatDuration } from '../../utils/helpers';
 interface Props {
   stats: ReportStats;
   reportId: string;
+  /** 'sm' fits narrower columns (e.g. side-by-side with a KPI card list) without clipping. */
+  size?: 'md' | 'sm';
 }
 
 interface TooltipPayload {
@@ -26,22 +28,24 @@ function CenterLabel({
   viewBox,
   passRate,
   duration,
+  compact,
 }: {
   viewBox?: { cx: number; cy: number };
   passRate: number;
   duration: number;
+  compact?: boolean;
 }) {
   const cx = viewBox?.cx ?? 0;
   const cy = viewBox?.cy ?? 0;
   return (
     <g>
-      <text x={cx} y={cy - 12} textAnchor="middle" fill="#0f172a" fontSize={30} fontWeight={700}>
+      <text x={cx} y={cy - (compact ? 9 : 12)} textAnchor="middle" fill="#0f172a" fontSize={compact ? 22 : 30} fontWeight={700}>
         {passRate}%
       </text>
-      <text x={cx} y={cy + 10} textAnchor="middle" fill="#475569" fontSize={12}>
+      <text x={cx} y={cy + (compact ? 8 : 10)} textAnchor="middle" fill="#475569" fontSize={compact ? 11 : 12}>
         Pass Rate
       </text>
-      <text x={cx} y={cy + 28} textAnchor="middle" fill="#64748b" fontSize={11}>
+      <text x={cx} y={cy + (compact ? 22 : 28)} textAnchor="middle" fill="#64748b" fontSize={compact ? 10 : 11}>
         {formatDuration(duration)}
       </text>
     </g>
@@ -71,8 +75,9 @@ function CustomTooltip({
   );
 }
 
-export function StatusDonutChart({ stats, reportId }: Props) {
+export function StatusDonutChart({ stats, reportId, size = 'md' }: Props) {
   const navigate = useNavigate();
+  const compact = size === 'sm';
 
   const data = (
     [
@@ -84,14 +89,14 @@ export function StatusDonutChart({ stats, reportId }: Props) {
   ).filter((d) => d.value > 0);
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ResponsiveContainer width="100%" height={compact ? 230 : 300}>
       <PieChart>
         <Pie
           data={data}
           cx="50%"
           cy="50%"
-          innerRadius={85}
-          outerRadius={125}
+          innerRadius={compact ? 58 : 85}
+          outerRadius={compact ? 85 : 125}
           paddingAngle={3}
           dataKey="value"
           strokeWidth={0}
@@ -109,7 +114,7 @@ export function StatusDonutChart({ stats, reportId }: Props) {
           ))}
           <Label
             content={
-              <CenterLabel passRate={stats.passRate} duration={stats.duration} viewBox={undefined} />
+              <CenterLabel passRate={stats.passRate} duration={stats.duration} viewBox={undefined} compact={compact} />
             }
             position="center"
           />

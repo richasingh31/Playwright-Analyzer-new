@@ -274,13 +274,13 @@ function FailuresByFolderGrid({
   }
 
   const current = path.length > 0 ? path[path.length - 1].children ?? [] : folderTree;
-  // Color-ordered: darkest red (highest fail rate) first, down through light red,
-  // with perfectly healthy (green) folders always last regardless of test volume.
+  // Color-ordered: perfectly healthy (green) folders always first, then
+  // ascending fail rate through light red, with darkest red (highest fail rate) last.
   const visible = [...current].sort((a, b) => {
     if (a.failed === 0 && b.failed === 0) return b.total - a.total;
-    if (a.failed === 0) return 1;
-    if (b.failed === 0) return -1;
-    return b.failRate - a.failRate || b.failed - a.failed;
+    if (a.failed === 0) return -1;
+    if (b.failed === 0) return 1;
+    return a.failRate - b.failRate || a.failed - b.failed;
   });
 
   const openNode = (node: FolderTreeNode) => {
@@ -435,7 +435,13 @@ function DateRangeFilter({
 
 // ── Page-level card ───────────────────────────────────────────────────────────
 
-export function FailuresByFolderCard({ reports }: { reports: ParsedReport[] }) {
+export function FailuresByFolderCard({
+  reports,
+  title = 'Test Results Heatmap',
+}: {
+  reports: ParsedReport[];
+  title?: string;
+}) {
   const [selectedId, setSelectedId] = useState('');
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
@@ -485,7 +491,7 @@ export function FailuresByFolderCard({ reports }: { reports: ParsedReport[] }) {
   return (
     <Card>
       <CardHeader
-        title="API Test Results Heatmap"
+        title={title}
         subtitle={
           hasRange
             ? `${filtered.length} of ${reports.length} reports · color is fail rate`

@@ -32,6 +32,7 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
+import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
 
 function reportTime(r: ReportSummary): number {
   return r.startTime ?? new Date(r.uploadedAt).getTime();
@@ -92,18 +93,47 @@ function TrendArrow({ current, prev }: { current: number; prev: number }) {
 }
 
 // ── Summary metric card ───────────────────────────────────────────────────────
+const METRIC_TONES = {
+  neutral: { text: 'text-slate-900', badge: 'bg-slate-100 text-slate-500', bg: undefined, border: undefined },
+  emerald: {
+    text: 'text-emerald-600',
+    badge: 'bg-emerald-500/10 text-emerald-600',
+    bg: 'rgba(16,185,129,0.05)',
+    border: 'rgba(16,185,129,0.3)',
+  },
+  red: {
+    text: 'text-red-600',
+    badge: 'bg-red-500/10 text-red-600',
+    bg: 'rgba(239,68,68,0.05)',
+    border: 'rgba(239,68,68,0.3)',
+  },
+} as const;
+
 function MetricCard({
+  icon,
   label,
   value,
   sub,
+  tone = 'neutral',
 }: {
+  icon?: React.ReactNode;
   label: string;
   value: string | number;
   sub?: string;
+  tone?: keyof typeof METRIC_TONES;
 }) {
+  const palette = METRIC_TONES[tone];
   return (
-    <Card className="text-center py-5">
-      <p className="text-3xl font-bold text-slate-900">{value}</p>
+    <Card
+      className="text-center py-5"
+      style={{ backgroundColor: palette.bg, borderColor: palette.border }}
+    >
+      {icon && (
+        <div className={`mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full ${palette.badge}`}>
+          {icon}
+        </div>
+      )}
+      <p className={`text-3xl font-bold ${palette.text}`}>{value}</p>
       <p className="text-sm text-slate-600 mt-1">{label}</p>
       {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
     </Card>
@@ -271,6 +301,7 @@ export function TrendsPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [reportKind, setReportKind] = useState<ReportKind>('api');
 
   const loadReports = () => {
     return reportsApi
@@ -306,9 +337,9 @@ export function TrendsPage() {
     }
   };
 
-  // UI-test reports (EstimationAI) are only ever shown in the "UI Test" card and
-  // their own analysis page — every other section of the dashboard works off the
-  // API-only subset below.
+  // The Latest Run row always shows one API card and one UI card side by side,
+  // regardless of the report-type toggle below — so it needs its own strictly
+  // API-only subset, separate from the toggle-driven "view" used everywhere else.
   const apiFullReports = useMemo(
     () => fullReports.filter((r) => classifyReportKind(r) !== 'ui'),
     [fullReports],
@@ -318,38 +349,55 @@ export function TrendsPage() {
     return reports.filter((r) => apiIds.has(r.id));
   }, [reports, apiFullReports]);
 
+  const uiFullReports = useMemo(
+    () => fullReports.filter((r) => classifyReportKind(r) === 'ui'),
+    [fullReports],
+  );
+  const uiReports = useMemo(() => {
+    const uiIds = new Set(uiFullReports.map((r) => r.id));
+    return reports.filter((r) => uiIds.has(r.id));
+  }, [reports, uiFullReports]);
+
+  // Everything below the Latest Run row (date range, avg rates, charts, heatmap,
+  // top failures, all-reports table) reflects whichever kind is selected here.
+  const viewFullReports = useMemo(
+    () => fullReports.filter((r) => classifyReportKind(r) === reportKind),
+    [fullReports, reportKind],
+  );
+  const viewReports = useMemo(() => {
+    const viewIds = new Set(viewFullReports.map((r) => r.id));
+    return reports.filter((r) => viewIds.has(r.id));
+  }, [reports, viewFullReports]);
+
   // Date-range filter applied across every section of the page. Computed with useMemo
   // (rather than after the loading/error guards below) so hook order stays stable.
   const filteredReports = useMemo(() => {
-    if (!dateFrom && !dateTo) return apiReports;
+    if (!dateFrom && !dateTo) return viewReports;
     const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : -Infinity;
     const toTs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : Infinity;
-    return apiReports.filter((r) => {
+    return viewReports.filter((r) => {
       const t = reportTime(r);
       return t >= fromTs && t <= toTs;
     });
-  }, [apiReports, dateFrom, dateTo]);
+  }, [viewReports, dateFrom, dateTo]);
 
   const filteredFullReports = useMemo(() => {
-    if (!dateFrom && !dateTo) return apiFullReports;
+    if (!dateFrom && !dateTo) return viewFullReports;
     const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : -Infinity;
     const toTs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : Infinity;
-    return apiFullReports.filter((r) => {
+    return viewFullReports.filter((r) => {
       const t = fullReportTime(r);
       return t >= fromTs && t <= toTs;
     });
-  }, [apiFullReports, dateFrom, dateTo]);
+  }, [viewFullReports, dateFrom, dateTo]);
 
   const latestApiReport = useMemo(() => {
     return apiReports.length > 0 ? { summary: apiReports[0], full: apiFullReports[0] } : undefined;
   }, [apiReports, apiFullReports]);
 
-  // The UI card is the one exception — it looks at the true latest report of
-  // every kind, not the API-only subset.
   const latestUiReport = useMemo(() => {
-    const idx = fullReports.findIndex((r) => classifyReportKind(r) === 'ui');
-    return idx >= 0 ? { summary: reports[idx], full: fullReports[idx] } : undefined;
-  }, [reports, fullReports]);
+    return uiReports.length > 0 ? { summary: uiReports[0], full: uiFullReports[0] } : undefined;
+  }, [uiReports, uiFullReports]);
 
   if (loading) return <FullPageSpinner label="Loading trends…" />;
   if (error) return <ErrorState message={error} />;
@@ -367,8 +415,8 @@ export function TrendsPage() {
         )
       : 0;
 
-  const minDateVal = apiReports.length ? toDateInputValue(reportTime(apiReports[apiReports.length - 1])) : '';
-  const maxDateVal = apiReports.length ? toDateInputValue(reportTime(apiReports[0])) : '';
+  const minDateVal = viewReports.length ? toDateInputValue(reportTime(viewReports[viewReports.length - 1])) : '';
+  const maxDateVal = viewReports.length ? toDateInputValue(reportTime(viewReports[0])) : '';
 
   const rangeLabel = formatRangeLabel(dateFrom, dateTo);
 
@@ -409,7 +457,7 @@ export function TrendsPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Trends</h1>
+          <h1 className="text-2xl font-extrabold uppercase tracking-wide text-slate-900">Trends</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -434,9 +482,9 @@ export function TrendsPage() {
 
       {/* Latest run snapshot — API vs UI test breakdown, independent of the date filter below */}
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-slate-700">Latest Run</h2>
+        <h2 className="text-sm font-bold text-slate-800">Latest Runs</h2>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr_1.4fr_1fr]">
           <Card>
             <CardHeader
               title="API Tests"
@@ -454,32 +502,9 @@ export function TrendsPage() {
               }
             />
             {latestApiReport ? (
-              <StatusDonutChart stats={latestApiReport.summary.stats} reportId={latestApiReport.summary.id} />
+              <StatusDonutChart stats={latestApiReport.summary.stats} reportId={latestApiReport.summary.id} size="sm" />
             ) : (
               <p className="text-center text-sm text-slate-500 py-16">No API test reports uploaded yet.</p>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader
-              title="UI Test"
-              subtitle={latestUiReport ? latestUiReport.summary.name : 'No UI test reports yet'}
-              action={
-                latestUiReport ? (
-                  <span className="text-xs text-slate-400">
-                    {formatDate(
-                      latestUiReport.summary.startTime
-                        ? new Date(latestUiReport.summary.startTime).toISOString()
-                        : latestUiReport.summary.uploadedAt,
-                    )}
-                  </span>
-                ) : undefined
-              }
-            />
-            {latestUiReport ? (
-              <StatusDonutChart stats={latestUiReport.summary.stats} reportId={latestUiReport.summary.id} />
-            ) : (
-              <p className="text-center text-sm text-slate-500 py-16">No UI test reports uploaded yet.</p>
             )}
           </Card>
 
@@ -530,21 +555,96 @@ export function TrendsPage() {
               </Card>
             )}
           </div>
+
+          <Card>
+            <CardHeader
+              title="UI Test"
+              subtitle={latestUiReport ? latestUiReport.summary.name : 'No UI test reports yet'}
+              action={
+                latestUiReport ? (
+                  <span className="text-xs text-slate-400">
+                    {formatDate(
+                      latestUiReport.summary.startTime
+                        ? new Date(latestUiReport.summary.startTime).toISOString()
+                        : latestUiReport.summary.uploadedAt,
+                    )}
+                  </span>
+                ) : undefined
+              }
+            />
+            {latestUiReport ? (
+              <StatusDonutChart stats={latestUiReport.summary.stats} reportId={latestUiReport.summary.id} size="sm" />
+            ) : (
+              <p className="text-center text-sm text-slate-500 py-16">No UI test reports uploaded yet.</p>
+            )}
+          </Card>
+
+          <div className="grid grid-cols-1 gap-3">
+            {uiReports.length > 0 ? (
+              <>
+                <KpiStatCard
+                  icon={<Layers className="h-5 w-5 text-indigo-600" />}
+                  tone="bg-indigo-500/10"
+                  label="Total Tests"
+                  value={uiReports[0].stats.total}
+                  previous={uiReports[1]?.stats.total}
+                />
+                <KpiStatCard
+                  icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+                  tone="bg-emerald-500/10"
+                  label="Passed"
+                  value={uiReports[0].stats.passed}
+                  previous={uiReports[1]?.stats.passed}
+                />
+                <KpiStatCard
+                  icon={<XCircle className="h-5 w-5 text-red-600" />}
+                  tone="bg-red-500/10"
+                  label="Failed"
+                  value={uiReports[0].stats.failed}
+                  previous={uiReports[1]?.stats.failed}
+                  invert
+                />
+                <KpiStatCard
+                  icon={<AlertCircle className="h-5 w-5 text-amber-600" />}
+                  tone="bg-amber-500/10"
+                  label="Flaky"
+                  value={uiReports[0].stats.flaky}
+                  previous={uiReports[1]?.stats.flaky}
+                  invert
+                />
+                <KpiStatCard
+                  icon={<SkipForward className="h-5 w-5 text-slate-500" />}
+                  tone="bg-slate-500/10"
+                  label="Skipped"
+                  value={uiReports[0].stats.skipped}
+                  previous={uiReports[1]?.stats.skipped}
+                />
+              </>
+            ) : (
+              <Card className="flex items-center justify-center py-16">
+                <p className="text-center text-sm text-slate-500">No UI test reports uploaded yet.</p>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Date range filter — applies to every section below */}
+      {/* Report type + date range filter — applies to every section below */}
       <Card className="py-5 px-5">
-        <DateRangeFilter
-          from={dateFrom}
-          to={dateTo}
-          minDate={minDateVal}
-          maxDate={maxDateVal}
-          onChange={(f, t) => {
-            setDateFrom(f);
-            setDateTo(t);
-          }}
-        />
+        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:flex-wrap">
+          <ReportKindSelect value={reportKind} onChange={setReportKind} />
+          <div className="hidden h-8 w-px bg-slate-200 sm:block" />
+          <DateRangeFilter
+            from={dateFrom}
+            to={dateTo}
+            minDate={minDateVal}
+            maxDate={maxDateVal}
+            onChange={(f, t) => {
+              setDateFrom(f);
+              setDateTo(t);
+            }}
+          />
+        </div>
       </Card>
 
       {/* Divider marking where the date-range-filtered analysis begins */}
@@ -552,7 +652,7 @@ export function TrendsPage() {
         <div className="h-px flex-1 bg-slate-200" />
         <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
           <CalendarRange className="h-3.5 w-3.5 text-indigo-500" />
-          Analysis for {rangeLabel}
+          {reportKind === 'ui' ? 'UI Tests' : 'API Tests'} — Analysis for {rangeLabel}
         </span>
         <div className="h-px flex-1 bg-slate-200" />
       </div>
@@ -560,21 +660,27 @@ export function TrendsPage() {
       {filteredReports.length === 0 ? (
         <div className="text-center py-16 text-slate-500">
           <CalendarRange className="h-8 w-8 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">No reports in the selected date range.</p>
+          <p className="text-sm">
+            No {reportKind === 'ui' ? 'UI test' : 'API test'} reports in the selected date range.
+          </p>
         </div>
       ) : (
         <>
       {/* Summary metrics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <MetricCard
+          icon={<TrendingUp className="h-4 w-4" />}
           label="Avg Pass Rate"
           value={`${avgPassRate}%`}
           sub="across selected runs"
+          tone="emerald"
         />
         <MetricCard
+          icon={<TrendingDown className="h-4 w-4" />}
           label="Avg Fail Rate"
           value={`${avgFailRate}%`}
           sub="across selected runs"
+          tone="red"
         />
       </div>
 
@@ -592,14 +698,14 @@ export function TrendsPage() {
           <DurationTrendChart reports={filteredReports} />
           <Card>
             <CardHeader
-              title="API Automation — Pass Trend"
+              title={`${reportKind === 'ui' ? 'UI' : 'API'} Automation — Pass Trend`}
               subtitle="Pass rate (%), last 5 runs"
             />
             <PassRateLineTrendChart reports={filteredReports} days={5} metric="pass" />
           </Card>
           <Card>
             <CardHeader
-              title="API Automation — Fail Trend"
+              title={`${reportKind === 'ui' ? 'UI' : 'API'} Automation — Fail Trend`}
               subtitle="Fail rate (%), last 5 runs"
             />
             <PassRateLineTrendChart reports={filteredReports} days={5} metric="fail" />

@@ -22,6 +22,7 @@ import { TenantStatusPieChart } from '../components/charts/TenantStatusPieChart'
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { formatDuration, classifyReportKind } from '../utils/helpers';
+import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -199,6 +200,110 @@ function buildTenantData(reports: ParsedReport[]): {
   });
 
   return { rows, tenants, tenantLabels, stats, statsByTenant };
+}
+
+// Fallback comparison for reports that carry no tenant signal at all (e.g. the
+// UI-test/EstimationAI suites) — instead of a dead end, compare the same test
+// case across the different uploaded runs, reusing the exact tenant-comparison
+// UI with each run standing in for a "tenant" column.
+function buildRunComparisonData(reports: ParsedReport[]): {
+  rows: ScenarioTenantRow[];
+  tenants: string[];
+  tenantLabels: Map<string, string>;
+  stats: SummaryStats;
+  statsByTenant: Map<string, TenantStats>;
+} {
+  const sortedReports = [...reports].sort(
+    (a, b) => new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime(),
+  );
+
+  const tenantLabels = new Map<string, string>();
+  const scenarioMap = new Map<
+    string,
+    {
+      title: string;
+      file: string;
+      apiName: string;
+      tenantStatuses: Map<string, TenantStatus>;
+    }
+  >();
+
+  sortedReports.forEach((report) => {
+    const runKey = `run:${report.id}`;
+    const runDate = new Date(report.metadata?.startTime ?? report.uploadedAt);
+    tenantLabels.set(
+      runKey,
+      `${report.name} — ${runDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+    );
+
+    report.suites.forEach((suite) => {
+      const apiName = suite.title || suite.file.split(/[\\/]/).pop()?.replace(/\.spec\.(ts|js|tsx|jsx)$/, '') || suite.file;
+      getAllTests(suite).forEach((test) => {
+        const normalizedTitle = stripTenantPrefix(test.title);
+        const scenarioKey = `${apiName}::${normalizedTitle}`;
+        if (!scenarioMap.has(scenarioKey)) {
+          scenarioMap.set(scenarioKey, {
+            title: normalizedTitle,
+            file: test.file,
+            apiName,
+            tenantStatuses: new Map(),
+          });
+        }
+        scenarioMap.get(scenarioKey)!.tenantStatuses.set(runKey, {
+          status: test.status,
+          errorMessage: test.error?.message,
+          errorCategory: test.error?.category,
+          errorStack: test.error?.stack,
+          duration: test.duration,
+        });
+      });
+    });
+  });
+
+  // Newest run first, matching how the rest of the dashboard prioritizes recency.
+  const runs = [...sortedReports].reverse().map((r) => `run:${r.id}`);
+
+  const rows: ScenarioTenantRow[] = Array.from(scenarioMap.entries()).map(
+    ([fullTitle, s]) => {
+      let passCount = 0;
+      let failCount = 0;
+      s.tenantStatuses.forEach((ts) => {
+        if (ts.status === 'passed') passCount++;
+        else if (ts.status === 'failed' || ts.status === 'flaky') failCount++;
+      });
+      const isDivergent = passCount > 0 && failCount > 0;
+      return { fullTitle, ...s, isDivergent, passCount, failCount };
+    },
+  );
+
+  rows.sort((a, b) => {
+    if (a.isDivergent !== b.isDivergent) return a.isDivergent ? -1 : 1;
+    if (a.failCount !== b.failCount) return b.failCount - a.failCount;
+    return a.title.localeCompare(b.title);
+  });
+
+  const stats: SummaryStats = {
+    totalScenarios: rows.length,
+    divergent: rows.filter((r) => r.isDivergent).length,
+    allFailing: rows.filter((r) => r.failCount > 0 && r.passCount === 0).length,
+    allPassing: rows.filter((r) => r.failCount === 0).length,
+    tenants: runs,
+  };
+
+  const statsByTenant = new Map<string, TenantStats>();
+  runs.forEach((t) => statsByTenant.set(t, { total: 0, passed: 0, failed: 0, skipped: 0 }));
+  rows.forEach((row) => {
+    row.tenantStatuses.forEach((ts, t) => {
+      const s = statsByTenant.get(t);
+      if (!s) return;
+      s.total++;
+      if (ts.status === 'passed') s.passed++;
+      else if (ts.status === 'failed' || ts.status === 'flaky') s.failed++;
+      else s.skipped++;
+    });
+  });
+
+  return { rows, tenants: runs, tenantLabels, stats, statsByTenant };
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -550,19 +655,20 @@ const COMPARE_TAB = '__compare__';
 
 export function TenantComparisonPage() {
   const navigate = useNavigate();
-  const [reports, setReports] = useState<ParsedReport[]>([]);
+  const [allReports, setAllReports] = useState<ParsedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterMode>('all');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>(COMPARE_TAB);
+  const [reportKind, setReportKind] = useState<ReportKind>('api');
 
   useEffect(() => {
     (async () => {
       try {
         const summaries = await reportsApi.getAll();
         const all = await Promise.all(summaries.map((s) => reportsApi.getById(s.id)));
-        setReports(all.filter((r) => classifyReportKind(r) !== 'ui'));
+        setAllReports(all);
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to load reports');
       } finally {
@@ -571,7 +677,12 @@ export function TenantComparisonPage() {
     })();
   }, []);
 
-  const { rows, tenants, tenantLabels, stats, statsByTenant } = useMemo(() => {
+  const reports = useMemo(
+    () => allReports.filter((r) => classifyReportKind(r) === reportKind),
+    [allReports, reportKind],
+  );
+
+  const { rows, tenants, tenantLabels, stats, statsByTenant, compareMode } = useMemo(() => {
     if (reports.length === 0)
       return {
         rows: [],
@@ -579,9 +690,20 @@ export function TenantComparisonPage() {
         tenantLabels: new Map<string, string>(),
         stats: { totalScenarios: 0, divergent: 0, allFailing: 0, allPassing: 0, tenants: [] },
         statsByTenant: new Map<string, TenantStats>(),
+        compareMode: 'tenant' as const,
       };
-    return buildTenantData(reports);
+    const byTenant = buildTenantData(reports);
+    // No (or only one) tenant detected — e.g. UI-test reports don't log tenant
+    // IDs — so fall back to comparing the same test case across uploaded runs.
+    if (byTenant.tenants.length < 2) {
+      const byRun = buildRunComparisonData(reports);
+      if (byRun.tenants.length >= 2) return { ...byRun, compareMode: 'run' as const };
+    }
+    return { ...byTenant, compareMode: 'tenant' as const };
   }, [reports]);
+
+  const dimensionLabel = compareMode === 'run' ? 'run' : 'tenant';
+  const dimensionLabelPlural = compareMode === 'run' ? 'runs' : 'tenants';
 
   // Default to the first tenant tab once tenants are known; fall back to Compare.
   useEffect(() => {
@@ -628,7 +750,7 @@ export function TenantComparisonPage() {
   if (loading) return <FullPageSpinner />;
   if (error) return <ErrorState message={error} />;
 
-  if (reports.length === 0) {
+  if (allReports.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Users className="h-12 w-12 text-slate-400" />
@@ -640,15 +762,44 @@ export function TenantComparisonPage() {
     );
   }
 
+  if (reports.length === 0) {
+    return (
+      <div className="mx-auto max-w-7xl px-6 py-10 space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+            <GitCompare className="h-6 w-6 text-indigo-600" />
+            Tenant Comparison
+          </h1>
+          <ReportKindSelect value={reportKind} onChange={setReportKind} />
+        </div>
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+          <Users className="h-12 w-12 text-slate-400" />
+          <p className="text-slate-600 text-lg">No {reportKind === 'ui' ? 'UI' : 'API'} test reports found</p>
+          <Button onClick={() => navigate('/')}>
+            <Upload className="h-4 w-4 mr-2" /> Upload Reports
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (tenants.length < 2) {
     return (
-      <div className="mx-auto max-w-7xl px-6 py-10">
+      <div className="mx-auto max-w-7xl px-6 py-10 space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+            <GitCompare className="h-6 w-6 text-indigo-600" />
+            Tenant Comparison
+          </h1>
+          <ReportKindSelect value={reportKind} onChange={setReportKind} />
+        </div>
         <div className="rounded-2xl border border-slate-300/60 bg-slate-200/60 p-10 text-center">
           <GitCompare className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">Need at least 2 tenants</h2>
+          <h2 className="text-lg font-semibold text-slate-900 mb-2">Need at least 2 tenants or 2 runs</h2>
           <p className="text-slate-600 text-sm max-w-md mx-auto mb-6">
             Upload a report whose tests log a tenant ID (e.g. <code className="text-indigo-700">[INFO] TenantId: 4</code>) or
-            whose file name carries one (e.g. <code className="text-indigo-700">TenantID:1</code>) to see cross-tenant divergence analysis.
+            whose file name carries one (e.g. <code className="text-indigo-700">TenantID:1</code>) to see cross-tenant divergence analysis —
+            or, for reports with no tenant data, upload at least 2 {reportKind === 'ui' ? 'UI' : 'API'} test reports to compare the same test case across runs instead.
           </p>
           <p className="text-slate-500 text-xs mb-6">
             Currently detected: {tenants.length === 1 ? (tenantLabels.get(tenants[0]) ?? tenants[0]) : 'no tenant patterns found'}
@@ -667,20 +818,27 @@ export function TenantComparisonPage() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-10 space-y-8">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-          <GitCompare className="h-6 w-6 text-indigo-600" />
-          Tenant Comparison
-        </h1>
-        <p className="text-slate-600 text-sm mt-1">
-          Per-tenant pass/fail breakdown by API and test case — switch tabs to compare
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+            <GitCompare className="h-6 w-6 text-indigo-600" />
+            Tenant Comparison
+          </h1>
+          <p className="text-slate-600 text-sm mt-1">
+            {compareMode === 'run'
+              ? 'No tenant IDs detected — comparing the same test case across uploaded runs instead. Switch tabs to compare.'
+              : 'Per-tenant pass/fail breakdown by API and test case — switch tabs to compare'}
+          </p>
+        </div>
+        <ReportKindSelect value={reportKind} onChange={setReportKind} />
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="p-5">
-          <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Tenants</div>
+          <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
+            {compareMode === 'run' ? 'Runs' : 'Tenants'}
+          </div>
           <div className="text-3xl font-bold text-slate-900">{tenants.length}</div>
           <div className="text-xs text-slate-500 mt-1">detected across {reports.length} report{reports.length === 1 ? '' : 's'}</div>
         </Card>
@@ -700,7 +858,7 @@ export function TenantComparisonPage() {
         >
           <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Failing All</div>
           <div className="text-3xl font-bold text-red-600">{stats.allFailing}</div>
-          <div className="text-xs text-slate-500 mt-1">fail across every tenant</div>
+          <div className="text-xs text-slate-500 mt-1">fail across every {dimensionLabel}</div>
         </Card>
         <Card
           className="p-5 cursor-pointer hover:border-emerald-500/40 transition-colors"
@@ -719,10 +877,12 @@ export function TenantComparisonPage() {
           <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-amber-700 mb-0.5">
-              {stats.divergent} API{stats.divergent > 1 ? 's' : ''} behave differently across tenants
+              {stats.divergent} API{stats.divergent > 1 ? 's' : ''} behave differently across {dimensionLabelPlural}
             </p>
             <p className="text-xs text-slate-600">
-              These tests pass for some tenants but fail for others — likely tenant-specific data, configuration, or permissions issues rather than a code bug.
+              {compareMode === 'run'
+                ? `These tests pass in some runs but fail in others — likely flakiness or a regression introduced between runs rather than a consistent bug.`
+                : `These tests pass for some tenants but fail for others — likely tenant-specific data, configuration, or permissions issues rather than a code bug.`}
             </p>
           </div>
         </div>
@@ -732,15 +892,15 @@ export function TenantComparisonPage() {
         <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/8 px-5 py-4 flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
           <p className="text-sm text-emerald-700">
-            All APIs behave consistently across tenants — no divergence detected.
+            All APIs behave consistently across {dimensionLabelPlural} — no divergence detected.
           </p>
         </div>
       )}
 
-      {/* Pass/fail breakdown per tenant */}
+      {/* Pass/fail breakdown per tenant (or per run, in the run-comparison fallback) */}
       <Card className="p-5">
         <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
-          Pass / Fail by Tenant
+          Pass / Fail by {compareMode === 'run' ? 'Run' : 'Tenant'}
         </div>
         <div className={`grid gap-4`} style={{ gridTemplateColumns: `repeat(${Math.min(tenants.length, 4)}, minmax(0, 1fr))` }}>
           {tenants.map((t) => {

@@ -18,6 +18,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
+import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -465,7 +466,7 @@ function ApiGroupBlock({
 type StatusFilter = 'all' | TestStatus;
 
 export function ApiScenariosPage() {
-  const [reports, setReports] = useState<ParsedReport[]>([]);
+  const [allReports, setAllReports] = useState<ParsedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -473,12 +474,13 @@ export function ApiScenariosPage() {
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [suiteFilter, setSuiteFilter] = useState<string>('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [reportKind, setReportKind] = useState<ReportKind>('api');
 
   const loadReports = () => {
     return reportsApi
       .getAll()
       .then((summaries) => Promise.all(summaries.map((s) => reportsApi.getById(s.id))))
-      .then((full) => setReports(full.filter((r) => classifyReportKind(r) !== 'ui')))
+      .then(setAllReports)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -486,6 +488,11 @@ export function ApiScenariosPage() {
   useEffect(() => {
     loadReports();
   }, []);
+
+  const reports = useMemo(
+    () => allReports.filter((r) => classifyReportKind(r) === reportKind),
+    [allReports, reportKind],
+  );
 
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
@@ -593,7 +600,7 @@ export function ApiScenariosPage() {
   if (loading) return <FullPageSpinner label="Loading API scenarios…" />;
   if (error) return <ErrorState message={error} />;
 
-  if (reports.length === 0) {
+  if (allReports.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-6 py-24 animate-fade-in">
         <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-200 text-slate-500">
@@ -621,6 +628,35 @@ export function ApiScenariosPage() {
     );
   }
 
+  if (reports.length === 0) {
+    return (
+      <div className="animate-slide-up space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h1 className="text-2xl font-bold text-slate-900">API &amp; Scenarios</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <ReportKindSelect value={reportKind} onChange={setReportKind} />
+            <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => setShowUploadModal(true)}>
+              Upload New
+            </Button>
+          </div>
+        </div>
+        {showUploadModal && (
+          <UploadReportModal
+            onClose={() => setShowUploadModal(false)}
+            onUploaded={() => {
+              setShowUploadModal(false);
+              loadReports();
+            }}
+          />
+        )}
+        <div className="text-center py-16 text-slate-500">
+          <Grid3X3 className="h-8 w-8 mx-auto mb-3 opacity-40" />
+          <p className="text-sm">No {reportKind === 'ui' ? 'UI' : 'API'} test reports uploaded yet.</p>
+        </div>
+      </div>
+    );
+  }
+
   const STATUS_TABS: { key: StatusFilter; label: string; count: number; color: string }[] = [
     { key: 'all',     label: 'All',     count: totals.scenarios, color: 'text-slate-700' },
     { key: 'failed',  label: 'Failed',  count: totals.failed,    color: 'text-red-600' },
@@ -632,7 +668,7 @@ export function ApiScenariosPage() {
   return (
     <div className="animate-slide-up space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">API &amp; Scenarios</h1>
           <p className="text-slate-600 text-sm mt-0.5">
@@ -642,9 +678,12 @@ export function ApiScenariosPage() {
             )}
           </p>
         </div>
-        <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => setShowUploadModal(true)}>
-          Upload New
-        </Button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <ReportKindSelect value={reportKind} onChange={setReportKind} />
+          <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => setShowUploadModal(true)}>
+            Upload New
+          </Button>
+        </div>
       </div>
 
       {showUploadModal && (
