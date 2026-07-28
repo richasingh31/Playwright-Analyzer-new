@@ -329,12 +329,12 @@ export function UploadPage() {
 
         {/* Right: recent reports rail */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-5 py-4">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-slate-400" />
               <h3 className="text-sm font-semibold text-slate-900">Recent Reports</h3>
             </div>
-            <ReportKindSelect value={reportKind} onChange={setReportKind} />
+            <ReportKindSelect value={reportKind} onChange={setReportKind} size="sm" />
           </div>
 
           <div className="max-h-[420px] overflow-y-auto p-3 space-y-3">
