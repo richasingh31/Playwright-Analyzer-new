@@ -14,7 +14,8 @@ import { clsx } from 'clsx';
 import { reportsApi, ApiError } from '../api/client';
 import type { ReportSummary } from '../types';
 import { Button } from '../components/ui/Button';
-import { timeAgo, formatDate } from '../utils/helpers';
+import { timeAgo, formatDate, classifyReportKind } from '../utils/helpers';
+import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
 
 const STEPS = [
   { icon: FileText, title: 'Select', desc: 'Pick or drop your .xml report' },
@@ -60,21 +61,31 @@ export function UploadPage() {
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
 
   const [recent, setRecent] = useState<ReportSummary[] | null>(null);
+  const [recentKinds, setRecentKinds] = useState<Map<string, ReportKind>>(new Map());
+  const [reportKind, setReportKind] = useState<ReportKind>('api');
 
   useEffect(() => {
     reportsApi
       .getAll()
-      .then((data) =>
-        setRecent(
-          [...data].sort((a, b) => {
-            const aTime = a.startTime ?? new Date(a.uploadedAt).getTime();
-            const bTime = b.startTime ?? new Date(b.uploadedAt).getTime();
-            return bTime - aTime;
-          }),
-        ),
-      )
+      .then((data) => {
+        const sorted = [...data].sort((a, b) => {
+          const aTime = a.startTime ?? new Date(a.uploadedAt).getTime();
+          const bTime = b.startTime ?? new Date(b.uploadedAt).getTime();
+          return bTime - aTime;
+        });
+        setRecent(sorted);
+        Promise.all(sorted.map((s) => reportsApi.getById(s.id)))
+          .then((full) => {
+            setRecentKinds(new Map(full.map((r) => [r.id, classifyReportKind(r)])));
+          })
+          .catch(() => {});
+      })
       .catch(() => setRecent([]));
   }, []);
+
+  const filteredRecent = (recent ?? []).filter(
+    (r) => (recentKinds.get(r.id) ?? 'api') === reportKind,
+  );
 
   const accept = (f: File) => {
     setError('');
@@ -318,11 +329,12 @@ export function UploadPage() {
 
         {/* Right: recent reports rail */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-slate-400" />
               <h3 className="text-sm font-semibold text-slate-900">Recent Reports</h3>
             </div>
+            <ReportKindSelect value={reportKind} onChange={setReportKind} />
           </div>
 
           <div className="max-h-[420px] overflow-y-auto p-3 space-y-3">
@@ -337,20 +349,26 @@ export function UploadPage() {
                 </div>
               ))}
 
-            {recent !== null && recent.length === 0 && (
+            {recent !== null && filteredRecent.length === 0 && (
               <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
                 <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
                   <Inbox className="h-5 w-5" />
                 </div>
-                <p className="text-sm font-medium text-slate-600">No reports yet</p>
+                <p className="text-sm font-medium text-slate-600">
+                  {recent.length === 0
+                    ? 'No reports yet'
+                    : `No ${reportKind === 'ui' ? 'UI' : 'API'} test reports yet`}
+                </p>
                 <p className="mt-1 text-xs text-slate-400 max-w-[16rem]">
-                  Upload your first Playwright JUnit XML report to see it show up here.
+                  {recent.length === 0
+                    ? 'Upload your first Playwright JUnit XML report to see it show up here.'
+                    : `Reports classified as ${reportKind === 'ui' ? 'API' : 'UI'} tests are shown under the other filter.`}
                 </p>
               </div>
             )}
 
             {recent !== null &&
-              recent.slice(0, 6).map((r) => {
+              filteredRecent.slice(0, 6).map((r) => {
                 const tone = passRateTone(r.stats.passRate);
                 return (
                   <button

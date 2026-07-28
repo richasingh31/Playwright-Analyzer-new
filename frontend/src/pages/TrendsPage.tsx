@@ -459,26 +459,7 @@ export function TrendsPage() {
         <div>
           <h1 className="text-2xl font-extrabold uppercase tracking-wide text-slate-900">Trends</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            icon={<Upload className="h-4 w-4" />}
-            onClick={() => setShowUploadModal(true)}
-          >
-            Upload New
-          </Button>
-        </div>
       </div>
-
-      {showUploadModal && (
-        <UploadReportModal
-          onClose={() => setShowUploadModal(false)}
-          onUploaded={() => {
-            setShowUploadModal(false);
-            loadReports();
-          }}
-        />
-      )}
 
       {/* Latest run snapshot — API vs UI test breakdown, independent of the date filter below */}
       <div className="space-y-3">

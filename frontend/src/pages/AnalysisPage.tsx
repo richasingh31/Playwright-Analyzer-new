@@ -13,13 +13,11 @@ import {
 import { reportsApi } from '../api/client';
 import type { ParsedReport, TestSuite } from '../types';
 import { formatDuration, formatDate } from '../utils/helpers';
-import { exportAnalysisPDF } from '../utils/pdfExport';
 import { StatusDonutChart } from '../components/charts/StatusDonutChart';
 import { SuiteBarChart, SuiteDetailCard } from '../components/charts/SuiteBarChart';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
-import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { ExecutiveSummary } from '../components/analysis/ExecutiveSummary';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
@@ -109,11 +107,6 @@ export function AnalysisPage() {
               </span>
             )}
           </div>
-        </div>
-
-        {/* Export button */}
-        <div className="flex items-center gap-3 shrink-0">
-          <ExportPDFButton onClick={() => exportAnalysisPDF(report)} />
         </div>
       </div>
 

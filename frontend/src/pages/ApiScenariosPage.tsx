@@ -635,20 +635,8 @@ export function ApiScenariosPage() {
           <h1 className="text-2xl font-bold text-slate-900">API &amp; Scenarios</h1>
           <div className="flex items-center gap-3 flex-wrap">
             <ReportKindSelect value={reportKind} onChange={setReportKind} />
-            <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => setShowUploadModal(true)}>
-              Upload New
-            </Button>
           </div>
         </div>
-        {showUploadModal && (
-          <UploadReportModal
-            onClose={() => setShowUploadModal(false)}
-            onUploaded={() => {
-              setShowUploadModal(false);
-              loadReports();
-            }}
-          />
-        )}
         <div className="text-center py-16 text-slate-500">
           <Grid3X3 className="h-8 w-8 mx-auto mb-3 opacity-40" />
           <p className="text-sm">No {reportKind === 'ui' ? 'UI' : 'API'} test reports uploaded yet.</p>
@@ -680,21 +668,8 @@ export function ApiScenariosPage() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <ReportKindSelect value={reportKind} onChange={setReportKind} />
-          <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => setShowUploadModal(true)}>
-            Upload New
-          </Button>
         </div>
       </div>
-
-      {showUploadModal && (
-        <UploadReportModal
-          onClose={() => setShowUploadModal(false)}
-          onUploaded={() => {
-            setShowUploadModal(false);
-            loadReports();
-          }}
-        />
-      )}
 
       {/* Summary stat chips */}
       <div className="flex items-center gap-3 flex-wrap">
