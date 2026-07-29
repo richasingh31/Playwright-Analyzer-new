@@ -10,6 +10,8 @@ import {
   ChevronUp,
   CheckCircle2,
   XCircle,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -358,8 +360,15 @@ const CATEGORY_STYLES: Record<string, { label: string; color: string; bg: string
   application:        { label: 'Application',  color: '#64748b', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.3)' },
 };
 
-function RegressionCard({ item }: { item: RegressionItem }) {
-  const [expanded, setExpanded] = useState(false);
+function RegressionCard({
+  item,
+  expanded,
+  onToggle,
+}: {
+  item: RegressionItem;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   const cat = CATEGORY_STYLES[item.errorCategory] ?? CATEGORY_STYLES.application;
   const shortFile = item.file.split(/[\\/]/).slice(-2).join('/');
 
@@ -393,7 +402,7 @@ function RegressionCard({ item }: { item: RegressionItem }) {
         {/* Expand toggle */}
         {item.errorStack && (
           <button
-            onClick={() => setExpanded((p) => !p)}
+            onClick={onToggle}
             className="shrink-0 text-slate-500 hover:text-slate-700 transition-colors"
             title={expanded ? 'Hide stack trace' : 'Show stack trace'}
           >
@@ -453,6 +462,20 @@ function RegressionSection({
   latestDate: string;
 }) {
   const hasRegressions = regressions.length > 0;
+  const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
+
+  const expandableKeys = regressions.filter((r) => r.errorStack).map((r) => r.testKey);
+  const allExpanded = expandableKeys.length > 0 && expandableKeys.every((k) => openOverrides[k]);
+
+  const toggleAll = () => {
+    setOpenOverrides(() => {
+      const next: Record<string, boolean> = {};
+      expandableKeys.forEach((k) => {
+        next[k] = !allExpanded;
+      });
+      return next;
+    });
+  };
 
   return (
     <Card>
@@ -462,6 +485,17 @@ function RegressionSection({
           prevDate && latestDate
             ? `Tests that passed on ${prevDate} but failed on ${latestDate}`
             : 'Tests that passed in the previous run but failed in the latest run'
+        }
+        action={
+          expandableKeys.length > 0 ? (
+            <button
+              onClick={toggleAll}
+              className="flex items-center gap-1.5 rounded-lg bg-slate-100/60 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+            >
+              {allExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              {allExpanded ? 'Collapse all' : 'Expand all'}
+            </button>
+          ) : undefined
         }
       />
 
@@ -490,7 +524,14 @@ function RegressionSection({
             </span>
           </div>
           {regressions.map((item) => (
-            <RegressionCard key={item.testKey} item={item} />
+            <RegressionCard
+              key={item.testKey}
+              item={item}
+              expanded={!!openOverrides[item.testKey]}
+              onToggle={() =>
+                setOpenOverrides((prev) => ({ ...prev, [item.testKey]: !prev[item.testKey] }))
+              }
+            />
           ))}
         </div>
       )}

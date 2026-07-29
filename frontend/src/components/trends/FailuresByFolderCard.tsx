@@ -294,47 +294,44 @@ function FailuresByFolderGrid({
 
   return (
     <div>
-      {/* Legend */}
-      <div className="flex justify-end mb-4">
-        <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 flex-wrap">
-          <span className="text-xs font-semibold text-slate-500 shrink-0">Fail Rate</span>
-          <div className="w-full max-w-[200px]">
-            <div
-              className="h-2.5 rounded-full shadow-inner ring-1 ring-black/5"
-              style={{ background: 'linear-gradient(to right, #7f1d1d, #b91c1c, #ef4444, #f87171, #fecaca)' }}
-            />
-            <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
-              <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
-            </div>
-          </div>
-          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 pl-3 border-l border-slate-200 shrink-0">
-            <span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-emerald-100" style={{ backgroundColor: '#10b981' }} />
+      {/* Breadcrumb + legend share one row — no standalone strip wasting vertical space */}
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => { setPath([]); setSelectedLeaf(null); }}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              path.length === 0 ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            All folders
+          </button>
+          {path.map((node, i) => (
+            <button
+              key={node.fullPath || node.name}
+              onClick={() => { setPath(path.slice(0, i + 1)); setSelectedLeaf(null); }}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                i === path.length - 1 ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {node.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <span className="text-[11px] font-semibold text-slate-500">Fail Rate</span>
+          <span className="text-[10px] text-slate-400 font-mono">100%</span>
+          <div
+            className="h-2 w-20 rounded-full shadow-inner ring-1 ring-black/5"
+            style={{ background: 'linear-gradient(to right, #7f1d1d, #b91c1c, #ef4444, #f87171, #fecaca)' }}
+          />
+          <span className="text-[10px] text-slate-400 font-mono">0%</span>
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 pl-2.5 border-l border-slate-200">
+            <span className="inline-block h-2 w-2 rounded-full ring-2 ring-emerald-100" style={{ backgroundColor: '#10b981' }} />
             No failures
           </span>
         </div>
-      </div>
-
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 flex-wrap mb-3">
-        <button
-          onClick={() => { setPath([]); setSelectedLeaf(null); }}
-          className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-            path.length === 0 ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
-        >
-          All folders
-        </button>
-        {path.map((node, i) => (
-          <button
-            key={node.fullPath || node.name}
-            onClick={() => { setPath(path.slice(0, i + 1)); setSelectedLeaf(null); }}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-              i === path.length - 1 ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {node.name}
-          </button>
-        ))}
       </div>
 
       {/* Uniform grid — every card is the same size; the grid just wraps onto as
