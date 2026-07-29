@@ -635,24 +635,24 @@ export function TrendsPage() {
           <Card>
             <CardHeader
               title="Test Results by Date"
-              subtitle="Pass/fail distribution across all runs"
+              subtitle="Pass/fail distribution — last 8 runs"
             />
-            <TrendsLineChart reports={filteredReports} />
+            <TrendsLineChart reports={filteredReports} maxRuns={8} />
           </Card>
           <DurationTrendChart reports={filteredReports} />
           <Card>
             <CardHeader
               title={`${reportKind === 'ui' ? 'UI' : 'API'} Automation — Pass Trend`}
-              subtitle="Pass rate (%), last 5 runs"
+              subtitle="Pass rate (%), last 8 runs"
             />
-            <PassRateLineTrendChart reports={filteredReports} days={5} metric="pass" />
+            <PassRateLineTrendChart reports={filteredReports} days={8} metric="pass" />
           </Card>
           <Card>
             <CardHeader
               title={`${reportKind === 'ui' ? 'UI' : 'API'} Automation — Fail Trend`}
-              subtitle="Fail rate (%), last 5 runs"
+              subtitle="Fail rate (%), last 8 runs"
             />
-            <PassRateLineTrendChart reports={filteredReports} days={5} metric="fail" />
+            <PassRateLineTrendChart reports={filteredReports} days={8} metric="fail" />
           </Card>
         </div>
       )}

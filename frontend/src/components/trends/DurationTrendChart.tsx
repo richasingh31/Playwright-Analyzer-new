@@ -122,14 +122,23 @@ function DurationTooltip({
   );
 }
 
-export function DurationTrendChart({ reports }: { reports: ReportSummary[] }) {
+export function DurationTrendChart({
+  reports,
+  maxRuns = 8,
+}: {
+  reports: ReportSummary[];
+  /** How many of the most recent runs to plot. */
+  maxRuns?: number;
+}) {
   const [mode, setMode] = useState<Mode>('perTest');
 
-  const sorted = [...reports].sort(
-    (a, b) =>
-      (a.startTime ?? new Date(a.uploadedAt).getTime()) -
-      (b.startTime ?? new Date(b.uploadedAt).getTime()),
-  );
+  const sorted = [...reports]
+    .sort(
+      (a, b) =>
+        (a.startTime ?? new Date(a.uploadedAt).getTime()) -
+        (b.startTime ?? new Date(b.uploadedAt).getTime()),
+    )
+    .slice(-maxRuns);
 
   const data: DataPoint[] = sorted.map((r) => ({
     date: shortDate(r),
@@ -154,8 +163,8 @@ export function DurationTrendChart({ reports }: { reports: ReportSummary[] }) {
         title="Suite Duration Trend"
         subtitle={
           mode === 'total'
-            ? 'Total run time per report — rising trend means slower CI'
-            : 'Average time per test per report — normalizes for test-count changes across runs'
+            ? `Total run time per report — last ${maxRuns} runs, rising trend means slower CI`
+            : `Average time per test per report — last ${maxRuns} runs, normalizes for test-count changes`
         }
         action={<ModeToggle mode={mode} onChange={setMode} />}
       />
@@ -207,7 +216,7 @@ export function DurationTrendChart({ reports }: { reports: ReportSummary[] }) {
           )}
           <Bar dataKey="value" maxBarSize={28} radius={[4, 4, 0, 0]}>
             {chartData.map((d, i) => (
-              <Cell key={i} fill={bandFor(d.value, mode).color} fillOpacity={0.85} />
+              <Cell key={i} fill={bandFor(d.value, mode).color} />
             ))}
           </Bar>
         </BarChart>

@@ -13,6 +13,8 @@ import { formatDate } from '../../utils/helpers';
 
 interface Props {
   reports: ReportSummary[];
+  /** How many of the most recent runs to plot. */
+  maxRuns?: number;
 }
 
 interface ChartEntry {
@@ -55,8 +57,9 @@ function SegmentLabel(props: {
       textAnchor="middle"
       dominantBaseline="middle"
       fill={labelFill}
-      fontSize={11}
-      fontWeight={700}
+      fontSize={12}
+      fontWeight={800}
+      style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.35)', strokeWidth: 3, strokeLinejoin: 'round' }}
     >
       {value}%
     </text>
@@ -119,14 +122,15 @@ function getReportDate(r: ReportSummary): string {
   return formatDate(dateStr).split(',')[0];
 }
 
-export function TrendsLineChart({ reports }: Props) {
+export function TrendsLineChart({ reports, maxRuns = 8 }: Props) {
   const sorted = [...reports].sort((a, b) => {
     const aTime = a.startTime ?? new Date(a.uploadedAt).getTime();
     const bTime = b.startTime ?? new Date(b.uploadedAt).getTime();
     return aTime - bTime;
   });
+  const recent = sorted.slice(-maxRuns);
 
-  const data: ChartEntry[] = sorted.map((r) => ({
+  const data: ChartEntry[] = recent.map((r) => ({
     date: getReportDate(r),
     name: r.name,
     passRate: r.stats.passRate,
@@ -183,21 +187,21 @@ export function TrendsLineChart({ reports }: Props) {
             cursor={{ fill: 'rgba(15,23,42,0.04)', radius: 4 }}
           />
           {/* Pass rate — bottom green segment */}
-          <Bar dataKey="passRate" stackId="a" fill="#10b981" fillOpacity={0.85} maxBarSize={60}>
+          <Bar dataKey="passRate" stackId="a" fill="#10b981" stroke="#fff" strokeWidth={2} maxBarSize={60}>
             <LabelList
               dataKey="passRate"
               content={(props) => (
-                <SegmentLabel {...props} labelFill="rgba(255,255,255,0.9)" />
+                <SegmentLabel {...props} labelFill="#ffffff" />
               )}
             />
           </Bar>
 
           {/* Fail rate — top red segment */}
-          <Bar dataKey="failRate" stackId="a" fill="#ef4444" fillOpacity={0.85} maxBarSize={60} radius={[4, 4, 0, 0]}>
+          <Bar dataKey="failRate" stackId="a" fill="#ef4444" stroke="#fff" strokeWidth={2} maxBarSize={60} radius={[4, 4, 0, 0]}>
             <LabelList
               dataKey="failRate"
               content={(props) => (
-                <SegmentLabel {...props} labelFill="rgba(255,255,255,0.9)" />
+                <SegmentLabel {...props} labelFill="#ffffff" />
               )}
             />
           </Bar>
