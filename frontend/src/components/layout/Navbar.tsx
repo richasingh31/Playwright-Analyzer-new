@@ -22,7 +22,7 @@ const NAV = [
   },
   {
     path: '/api-scenarios',
-    label: 'API & Scenarios',
+    label: 'Scenarios',
     Icon: Grid3X3,
     text: 'text-violet-600',
     hover: 'hover:bg-violet-50 hover:text-violet-700',

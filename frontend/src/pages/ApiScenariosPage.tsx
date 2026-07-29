@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Upload,
   Search,
@@ -10,6 +10,9 @@ import {
   SkipForward,
   Grid3X3,
   FileText,
+  Maximize2,
+  Minimize2,
+  ListFilter,
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
 import type { ParsedReport, TestResult, TestSuite, TestStatus } from '../types';
@@ -353,15 +356,16 @@ function ApiGroupBlock({
   reportMeta,
   hoverIdx,
   onHover,
-  defaultOpen,
+  open,
+  onToggle,
 }: {
   group: ApiGroup;
   reportMeta: ReportMeta[];
   hoverIdx: number | null;
   onHover: (i: number | null) => void;
-  defaultOpen: boolean;
+  open: boolean;
+  onToggle: () => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   const passRate = group.total > 0 ? Math.round((group.passCount / group.total) * 100) : 0;
 
   return (
@@ -369,7 +373,7 @@ function ApiGroupBlock({
       {/* Group header */}
       <button
         className="w-full flex items-center gap-3 px-5 py-4 hover:bg-slate-300/30 transition-colors text-left"
-        onClick={() => setOpen((p) => !p)}
+        onClick={onToggle}
       >
         <span className="text-slate-600 shrink-0">
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -461,6 +465,123 @@ function ApiGroupBlock({
   );
 }
 
+// ── Expand / Collapse dropdown ───────────────────────────────────────────────
+
+function useClickOutside(onOutside: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onOutside();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onOutside]);
+  return ref;
+}
+
+function ExpandCollapseMenu({
+  onExpandAll,
+  onCollapseAll,
+}: {
+  onExpandAll: () => void;
+  onCollapseAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useClickOutside(() => setOpen(false));
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="flex items-center gap-1.5 bg-slate-100/60 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
+      >
+        <Maximize2 className="h-3.5 w-3.5 text-slate-500" />
+        Groups
+        <ChevronDown className={`h-3.5 w-3.5 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 z-10 mt-1 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg animate-fade-in">
+          <button
+            onClick={() => {
+              onExpandAll();
+              setOpen(false);
+            }}
+            className="flex w-full items-center gap-2 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            <Maximize2 className="h-3.5 w-3.5 text-slate-500" />
+            Expand all
+          </button>
+          <button
+            onClick={() => {
+              onCollapseAll();
+              setOpen(false);
+            }}
+            className="flex w-full items-center gap-2 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            <Minimize2 className="h-3.5 w-3.5 text-slate-500" />
+            Collapse all
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Status filter dropdown ───────────────────────────────────────────────────
+
+function StatusFilterMenu({
+  tabs,
+  value,
+  onChange,
+}: {
+  tabs: { key: StatusFilter; label: string; count: number; color: string }[];
+  value: StatusFilter;
+  onChange: (key: StatusFilter) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useClickOutside(() => setOpen(false));
+  const active = tabs.find((t) => t.key === value) ?? tabs[0];
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="flex items-center gap-1.5 bg-slate-100/60 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
+      >
+        <ListFilter className="h-3.5 w-3.5 text-slate-500" />
+        <span className={active.key === 'all' ? '' : active.color}>{active.label}</span>
+        <span className="tabular-nums text-slate-400">{active.count}</span>
+        <ChevronDown className={`h-3.5 w-3.5 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 z-10 mt-1 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg animate-fade-in">
+          {tabs.map(({ key, label, count, color }) =>
+            count > 0 || key === 'all' ? (
+              <button
+                key={key}
+                onClick={() => {
+                  onChange(key);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-2 px-3.5 py-2 text-sm font-medium transition-colors ${
+                  value === key ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <span className={key === 'all' ? '' : color}>{label}</span>
+                <span className="tabular-nums text-slate-400">{count}</span>
+              </button>
+            ) : null,
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 type StatusFilter = 'all' | TestStatus;
@@ -475,6 +596,7 @@ export function ApiScenariosPage() {
   const [suiteFilter, setSuiteFilter] = useState<string>('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [reportKind, setReportKind] = useState<ReportKind>('api');
+  const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
 
   const loadReports = () => {
     return reportsApi
@@ -584,6 +706,26 @@ export function ApiScenariosPage() {
       .filter((g) => g.scenarios.length > 0);
   }, [apiGroups, search, statusFilter, suiteFilter]);
 
+  const expandAll = () => {
+    setOpenOverrides((prev) => {
+      const next = { ...prev };
+      filtered.forEach((g) => {
+        next[g.apiKey] = true;
+      });
+      return next;
+    });
+  };
+
+  const collapseAll = () => {
+    setOpenOverrides((prev) => {
+      const next = { ...prev };
+      filtered.forEach((g) => {
+        next[g.apiKey] = false;
+      });
+      return next;
+    });
+  };
+
   // Summary stats
   const totals = useMemo(() => {
     const all = apiGroups.flatMap((g) => g.scenarios);
@@ -632,7 +774,7 @@ export function ApiScenariosPage() {
     return (
       <div className="animate-slide-up space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-2xl font-bold text-slate-900">API &amp; Scenarios</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Scenarios</h1>
           <div className="flex items-center gap-3 flex-wrap">
             <ReportKindSelect value={reportKind} onChange={setReportKind} />
           </div>
@@ -658,7 +800,7 @@ export function ApiScenariosPage() {
       {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">API &amp; Scenarios</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Scenarios</h1>
           <p className="text-slate-600 text-sm mt-0.5">
             {totals.apis} API{totals.apis !== 1 ? 's' : ''} · {totals.scenarios} scenario{totals.scenarios !== 1 ? 's' : ''} across {dateFilteredReports.length} report{dateFilteredReports.length !== 1 ? 's' : ''}
             {dateFilter !== 'all' && (
@@ -773,27 +915,11 @@ export function ApiScenariosPage() {
             ))}
           </select>
 
-          {/* Status tabs */}
-          <div className="flex items-center gap-1">
-            {STATUS_TABS.map(({ key, label, count, color }) => (
-              count > 0 || key === 'all' ? (
-                <button
-                  key={key}
-                  onClick={() => setStatusFilter(key)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    statusFilter === key
-                      ? 'bg-slate-300 text-slate-900'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <span className={statusFilter === key ? 'text-slate-900' : color}>{label}</span>
-                  <span className={`tabular-nums ${statusFilter === key ? 'text-slate-700' : 'text-slate-400'}`}>
-                    {count}
-                  </span>
-                </button>
-              ) : null
-            ))}
-          </div>
+          {/* Status filter dropdown */}
+          <StatusFilterMenu tabs={STATUS_TABS} value={statusFilter} onChange={setStatusFilter} />
+
+          {/* Expand / collapse all dropdown */}
+          <ExpandCollapseMenu onExpandAll={expandAll} onCollapseAll={collapseAll} />
         </div>
       </Card>
 
@@ -805,16 +931,21 @@ export function ApiScenariosPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((group, i) => (
-            <ApiGroupBlock
-              key={group.apiKey}
-              group={group}
-              reportMeta={reportMeta}
-              hoverIdx={hoverIdx}
-              onHover={setHoverIdx}
-              defaultOpen={i === 0 || group.failCount > 0}
-            />
-          ))}
+          {filtered.map((group, i) => {
+            const defaultOpen = i === 0 || group.failCount > 0;
+            const isOpen = openOverrides[group.apiKey] ?? defaultOpen;
+            return (
+              <ApiGroupBlock
+                key={group.apiKey}
+                group={group}
+                reportMeta={reportMeta}
+                hoverIdx={hoverIdx}
+                onHover={setHoverIdx}
+                open={isOpen}
+                onToggle={() => setOpenOverrides((prev) => ({ ...prev, [group.apiKey]: !isOpen }))}
+              />
+            );
+          })}
         </div>
       )}
     </div>

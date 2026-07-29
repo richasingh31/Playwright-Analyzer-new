@@ -151,24 +151,68 @@ function KpiDelta({
   invert?: boolean;
 }) {
   if (previous === undefined) {
-    return <span className="text-xs text-slate-400">no previous run</span>;
+    return <span className="text-[11px] text-slate-400">no previous run</span>;
   }
   const delta = current - previous;
   if (delta === 0) {
     return (
-      <span className="flex items-center gap-1 text-xs text-slate-500">
-        <Minus className="h-3 w-3" /> same as last run
+      <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+        <Minus className="h-3 w-3 shrink-0" /> same as last
       </span>
     );
   }
   const improved = invert ? delta < 0 : delta > 0;
   const Icon = delta > 0 ? TrendingUp : TrendingDown;
   return (
-    <span className={`flex items-center gap-1 text-xs font-medium ${improved ? 'text-emerald-600' : 'text-red-600'}`}>
-      <Icon className="h-3 w-3" />
+    <span className={`inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap ${improved ? 'text-emerald-600' : 'text-red-600'}`}>
+      <Icon className="h-3 w-3 shrink-0" />
       {delta > 0 ? '+' : ''}
-      {delta} vs last run
+      {delta} vs last
     </span>
+  );
+}
+
+function KpiRow({ latest, previous }: { latest: ReportSummary; previous?: ReportSummary }) {
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <KpiStatCard
+        icon={<Layers className="h-5 w-5 text-indigo-600" />}
+        tone="bg-indigo-500/10"
+        label="Total Tests"
+        value={latest.stats.total}
+        previous={previous?.stats.total}
+      />
+      <KpiStatCard
+        icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+        tone="bg-emerald-500/10"
+        label="Passed"
+        value={latest.stats.passed}
+        previous={previous?.stats.passed}
+      />
+      <KpiStatCard
+        icon={<XCircle className="h-5 w-5 text-red-600" />}
+        tone="bg-red-500/10"
+        label="Failed"
+        value={latest.stats.failed}
+        previous={previous?.stats.failed}
+        invert
+      />
+      <KpiStatCard
+        icon={<AlertCircle className="h-5 w-5 text-amber-600" />}
+        tone="bg-amber-500/10"
+        label="Flaky"
+        value={latest.stats.flaky}
+        previous={previous?.stats.flaky}
+        invert
+      />
+      <KpiStatCard
+        icon={<SkipForward className="h-5 w-5 text-slate-500" />}
+        tone="bg-slate-500/10"
+        label="Skipped"
+        value={latest.stats.skipped}
+        previous={previous?.stats.skipped}
+      />
+    </div>
   );
 }
 
@@ -188,17 +232,11 @@ function KpiStatCard({
   invert?: boolean;
 }) {
   return (
-    <Card className="py-4 px-4">
-      <div className="flex items-center gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl shrink-0 ${tone}`}>{icon}</div>
-        <div className="min-w-0">
-          <p className="text-2xl font-bold text-slate-900 leading-tight tabular-nums">{value}</p>
-          <p className="text-xs text-slate-500">{label}</p>
-        </div>
-      </div>
-      <div className="mt-2.5 pl-[52px]">
-        <KpiDelta current={value} previous={previous} invert={invert} />
-      </div>
+    <Card className="flex flex-col items-center gap-1.5 px-2 py-4 text-center">
+      <div className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 ${tone}`}>{icon}</div>
+      <p className="text-xl font-bold text-slate-900 leading-tight tabular-nums">{value}</p>
+      <p className="text-xs text-slate-500">{label}</p>
+      <KpiDelta current={value} previous={previous} invert={invert} />
     </Card>
   );
 }
@@ -465,7 +503,7 @@ export function TrendsPage() {
       <div className="space-y-3">
         <h2 className="text-sm font-bold text-slate-800">Latest Runs</h2>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr_1.4fr_1fr]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader
               title="API Tests"
@@ -483,59 +521,14 @@ export function TrendsPage() {
               }
             />
             {latestApiReport ? (
-              <StatusDonutChart stats={latestApiReport.summary.stats} reportId={latestApiReport.summary.id} size="sm" />
+              <>
+                <StatusDonutChart stats={latestApiReport.summary.stats} reportId={latestApiReport.summary.id} size="sm" />
+                <KpiRow latest={apiReports[0]} previous={apiReports[1]} />
+              </>
             ) : (
               <p className="text-center text-sm text-slate-500 py-16">No API test reports uploaded yet.</p>
             )}
           </Card>
-
-          <div className="grid grid-cols-1 gap-3">
-            {apiReports.length > 0 ? (
-              <>
-                <KpiStatCard
-                  icon={<Layers className="h-5 w-5 text-indigo-600" />}
-                  tone="bg-indigo-500/10"
-                  label="Total Tests"
-                  value={apiReports[0].stats.total}
-                  previous={apiReports[1]?.stats.total}
-                />
-                <KpiStatCard
-                  icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
-                  tone="bg-emerald-500/10"
-                  label="Passed"
-                  value={apiReports[0].stats.passed}
-                  previous={apiReports[1]?.stats.passed}
-                />
-                <KpiStatCard
-                  icon={<XCircle className="h-5 w-5 text-red-600" />}
-                  tone="bg-red-500/10"
-                  label="Failed"
-                  value={apiReports[0].stats.failed}
-                  previous={apiReports[1]?.stats.failed}
-                  invert
-                />
-                <KpiStatCard
-                  icon={<AlertCircle className="h-5 w-5 text-amber-600" />}
-                  tone="bg-amber-500/10"
-                  label="Flaky"
-                  value={apiReports[0].stats.flaky}
-                  previous={apiReports[1]?.stats.flaky}
-                  invert
-                />
-                <KpiStatCard
-                  icon={<SkipForward className="h-5 w-5 text-slate-500" />}
-                  tone="bg-slate-500/10"
-                  label="Skipped"
-                  value={apiReports[0].stats.skipped}
-                  previous={apiReports[1]?.stats.skipped}
-                />
-              </>
-            ) : (
-              <Card className="flex items-center justify-center py-16">
-                <p className="text-center text-sm text-slate-500">No API test reports uploaded yet.</p>
-              </Card>
-            )}
-          </div>
 
           <Card>
             <CardHeader
@@ -554,59 +547,14 @@ export function TrendsPage() {
               }
             />
             {latestUiReport ? (
-              <StatusDonutChart stats={latestUiReport.summary.stats} reportId={latestUiReport.summary.id} size="sm" />
+              <>
+                <StatusDonutChart stats={latestUiReport.summary.stats} reportId={latestUiReport.summary.id} size="sm" />
+                <KpiRow latest={uiReports[0]} previous={uiReports[1]} />
+              </>
             ) : (
               <p className="text-center text-sm text-slate-500 py-16">No UI test reports uploaded yet.</p>
             )}
           </Card>
-
-          <div className="grid grid-cols-1 gap-3">
-            {uiReports.length > 0 ? (
-              <>
-                <KpiStatCard
-                  icon={<Layers className="h-5 w-5 text-indigo-600" />}
-                  tone="bg-indigo-500/10"
-                  label="Total Tests"
-                  value={uiReports[0].stats.total}
-                  previous={uiReports[1]?.stats.total}
-                />
-                <KpiStatCard
-                  icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
-                  tone="bg-emerald-500/10"
-                  label="Passed"
-                  value={uiReports[0].stats.passed}
-                  previous={uiReports[1]?.stats.passed}
-                />
-                <KpiStatCard
-                  icon={<XCircle className="h-5 w-5 text-red-600" />}
-                  tone="bg-red-500/10"
-                  label="Failed"
-                  value={uiReports[0].stats.failed}
-                  previous={uiReports[1]?.stats.failed}
-                  invert
-                />
-                <KpiStatCard
-                  icon={<AlertCircle className="h-5 w-5 text-amber-600" />}
-                  tone="bg-amber-500/10"
-                  label="Flaky"
-                  value={uiReports[0].stats.flaky}
-                  previous={uiReports[1]?.stats.flaky}
-                  invert
-                />
-                <KpiStatCard
-                  icon={<SkipForward className="h-5 w-5 text-slate-500" />}
-                  tone="bg-slate-500/10"
-                  label="Skipped"
-                  value={uiReports[0].stats.skipped}
-                  previous={uiReports[1]?.stats.skipped}
-                />
-              </>
-            ) : (
-              <Card className="flex items-center justify-center py-16">
-                <p className="text-center text-sm text-slate-500">No UI test reports uploaded yet.</p>
-              </Card>
-            )}
-          </div>
         </div>
       </div>
 

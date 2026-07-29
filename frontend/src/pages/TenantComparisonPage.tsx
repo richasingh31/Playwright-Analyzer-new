@@ -22,7 +22,6 @@ import { TenantStatusPieChart } from '../components/charts/TenantStatusPieChart'
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { formatDuration, classifyReportKind } from '../utils/helpers';
-import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -661,7 +660,6 @@ export function TenantComparisonPage() {
   const [filter, setFilter] = useState<FilterMode>('all');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>(COMPARE_TAB);
-  const [reportKind, setReportKind] = useState<ReportKind>('api');
 
   useEffect(() => {
     (async () => {
@@ -678,8 +676,8 @@ export function TenantComparisonPage() {
   }, []);
 
   const reports = useMemo(
-    () => allReports.filter((r) => classifyReportKind(r) === reportKind),
-    [allReports, reportKind],
+    () => allReports.filter((r) => classifyReportKind(r) === 'api'),
+    [allReports],
   );
 
   const { rows, tenants, tenantLabels, stats, statsByTenant, compareMode } = useMemo(() => {
@@ -770,11 +768,10 @@ export function TenantComparisonPage() {
             <GitCompare className="h-6 w-6 text-indigo-600" />
             Tenant Comparison
           </h1>
-          <ReportKindSelect value={reportKind} onChange={setReportKind} />
         </div>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
           <Users className="h-12 w-12 text-slate-400" />
-          <p className="text-slate-600 text-lg">No {reportKind === 'ui' ? 'UI' : 'API'} test reports found</p>
+          <p className="text-slate-600 text-lg">No API test reports found</p>
           <Button onClick={() => navigate('/')}>
             <Upload className="h-4 w-4 mr-2" /> Upload Reports
           </Button>
@@ -791,7 +788,6 @@ export function TenantComparisonPage() {
             <GitCompare className="h-6 w-6 text-indigo-600" />
             Tenant Comparison
           </h1>
-          <ReportKindSelect value={reportKind} onChange={setReportKind} />
         </div>
         <div className="rounded-2xl border border-slate-300/60 bg-slate-200/60 p-10 text-center">
           <GitCompare className="h-12 w-12 text-slate-500 mx-auto mb-4" />
@@ -799,7 +795,7 @@ export function TenantComparisonPage() {
           <p className="text-slate-600 text-sm max-w-md mx-auto mb-6">
             Upload a report whose tests log a tenant ID (e.g. <code className="text-indigo-700">[INFO] TenantId: 4</code>) or
             whose file name carries one (e.g. <code className="text-indigo-700">TenantID:1</code>) to see cross-tenant divergence analysis —
-            or, for reports with no tenant data, upload at least 2 {reportKind === 'ui' ? 'UI' : 'API'} test reports to compare the same test case across runs instead.
+            or, for reports with no tenant data, upload at least 2 API test reports to compare the same test case across runs instead.
           </p>
           <p className="text-slate-500 text-xs mb-6">
             Currently detected: {tenants.length === 1 ? (tenantLabels.get(tenants[0]) ?? tenants[0]) : 'no tenant patterns found'}
@@ -830,7 +826,6 @@ export function TenantComparisonPage() {
               : 'Per-tenant pass/fail breakdown by API and test case — switch tabs to compare'}
           </p>
         </div>
-        <ReportKindSelect value={reportKind} onChange={setReportKind} />
       </div>
 
       {/* Summary cards */}
