@@ -4,6 +4,7 @@ import {
   Search,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   CheckCircle2,
   XCircle,
   AlertCircle,
@@ -597,6 +598,8 @@ export function ApiScenariosPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [reportKind, setReportKind] = useState<ReportKind>('api');
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
+  const [uploadsPage, setUploadsPage] = useState(0);
+  const UPLOADS_PAGE_SIZE = 8;
 
   const loadReports = () => {
     return reportsApi
@@ -689,6 +692,17 @@ export function ApiScenariosPage() {
       };
     });
   }, [sortedReports]);
+
+  // Reset to the first page of uploads whenever the underlying report set changes.
+  useEffect(() => {
+    setUploadsPage(0);
+  }, [reportMeta.length]);
+
+  const uploadsPageCount = Math.max(1, Math.ceil(reportMeta.length / UPLOADS_PAGE_SIZE));
+  const pagedReportMeta = reportMeta.slice(
+    uploadsPage * UPLOADS_PAGE_SIZE,
+    uploadsPage * UPLOADS_PAGE_SIZE + UPLOADS_PAGE_SIZE,
+  );
 
   // Apply filters
   const filtered = useMemo(() => {
@@ -840,8 +854,8 @@ export function ApiScenariosPage() {
             <span className="text-xs font-medium text-slate-500 shrink-0 mr-1">
               Uploads (oldest → newest, hover to trace a run):
             </span>
-            {reportMeta.map((rm, i) => {
-              const rep = sortedReports[i];
+            {pagedReportMeta.map((rm) => {
+              const rep = sortedReports[rm.index - 1];
               const tone =
                 rep.stats.passRate === 100 ? '#10b981' : rep.stats.passRate >= 70 ? '#f59e0b' : '#ef4444';
               return (
@@ -868,6 +882,30 @@ export function ApiScenariosPage() {
                 </button>
               );
             })}
+
+            {uploadsPageCount > 1 && (
+              <div className="flex items-center gap-1 shrink-0 ml-auto pl-2">
+                <button
+                  onClick={() => setUploadsPage((p) => Math.max(0, p - 1))}
+                  disabled={uploadsPage === 0}
+                  className="flex items-center justify-center h-6 w-6 rounded-md text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                  title="Previous uploads"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="text-[11px] font-medium text-slate-500 tabular-nums px-0.5">
+                  {uploadsPage + 1}/{uploadsPageCount}
+                </span>
+                <button
+                  onClick={() => setUploadsPage((p) => Math.min(uploadsPageCount - 1, p + 1))}
+                  disabled={uploadsPage >= uploadsPageCount - 1}
+                  className="flex items-center justify-center h-6 w-6 rounded-md text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                  title="Next uploads"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </Card>
       )}

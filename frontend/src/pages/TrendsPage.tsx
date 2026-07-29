@@ -18,6 +18,8 @@ import {
   Calendar,
   Search,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
 import type { ParsedReport, ReportSummary } from '../types';
@@ -340,6 +342,8 @@ export function TrendsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [reportKind, setReportKind] = useState<ReportKind>('api');
+  const [reportsPage, setReportsPage] = useState(0);
+  const REPORTS_PAGE_SIZE = 8;
 
   const loadReports = () => {
     return reportsApi
@@ -428,6 +432,17 @@ export function TrendsPage() {
       return t >= fromTs && t <= toTs;
     });
   }, [viewFullReports, dateFrom, dateTo]);
+
+  // Reset to page 1 whenever the underlying report set changes shape.
+  useEffect(() => {
+    setReportsPage(0);
+  }, [reportKind, dateFrom, dateTo, filteredReports.length]);
+
+  const reportsPageCount = Math.max(1, Math.ceil(filteredReports.length / REPORTS_PAGE_SIZE));
+  const pagedReports = filteredReports.slice(
+    reportsPage * REPORTS_PAGE_SIZE,
+    reportsPage * REPORTS_PAGE_SIZE + REPORTS_PAGE_SIZE,
+  );
 
   const latestApiReport = useMemo(() => {
     return apiReports.length > 0 ? { summary: apiReports[0], full: apiFullReports[0] } : undefined;
@@ -653,6 +668,15 @@ export function TrendsPage() {
         <CardHeader
           title="All Reports"
           subtitle="Click a row to open the full analysis"
+          action={
+            filteredReports.length > 0 ? (
+              <span className="text-xs text-slate-400">
+                {reportsPage * REPORTS_PAGE_SIZE + 1}–
+                {Math.min(filteredReports.length, reportsPage * REPORTS_PAGE_SIZE + REPORTS_PAGE_SIZE)} of{' '}
+                {filteredReports.length}
+              </span>
+            ) : undefined
+          }
         />
 
         <div className="overflow-x-auto -mx-2">
@@ -673,8 +697,8 @@ export function TrendsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-300/40">
-              {filteredReports.map((r, i) => {
-                const prev = filteredReports[i + 1];
+              {pagedReports.map((r, i) => {
+                const prev = filteredReports[reportsPage * REPORTS_PAGE_SIZE + i + 1];
                 return (
                   <tr
                     key={r.id}
@@ -749,6 +773,28 @@ export function TrendsPage() {
             </tbody>
           </table>
         </div>
+
+        {reportsPageCount > 1 && (
+          <div className="flex items-center justify-center gap-3 pt-4">
+            <button
+              onClick={() => setReportsPage((p) => Math.max(0, p - 1))}
+              disabled={reportsPage === 0}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" /> Prev
+            </button>
+            <span className="text-xs font-medium text-slate-500 tabular-nums">
+              Page {reportsPage + 1} of {reportsPageCount}
+            </span>
+            <button
+              onClick={() => setReportsPage((p) => Math.min(reportsPageCount - 1, p + 1))}
+              disabled={reportsPage >= reportsPageCount - 1}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              Next <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </Card>
         </>
       )}
