@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ParsedReport, ReportSummary, UploadResponse } from '../types';
+import type { ParsedReport, ReportSummary, UploadResponse, Environment } from '../types';
 
 const http = axios.create({ baseURL: '/api', timeout: 30_000 });
 
@@ -22,9 +22,14 @@ http.interceptors.response.use(
 );
 
 export const reportsApi = {
-  upload: async (file: File, onProgress?: (pct: number) => void): Promise<UploadResponse> => {
+  upload: async (
+    file: File,
+    onProgress?: (pct: number) => void,
+    environment: Environment = 'QA',
+  ): Promise<UploadResponse> => {
     const fd = new FormData();
     fd.append('report', file);
+    fd.append('environment', environment);
     const { data } = await http.post<UploadResponse>('/reports/upload', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {

@@ -37,6 +37,7 @@ import { UploadReportModal } from '../components/upload/UploadReportModal';
 import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
 import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { exportTrendsPDF } from '../utils/pdfExport';
+import { useEnvironment } from '../context/EnvironmentContext';
 
 function reportTime(r: ReportSummary): number {
   return r.startTime ?? new Date(r.uploadedAt).getTime();
@@ -335,6 +336,7 @@ function DateRangeFilter({
 // ── Page ──────────────────────────────────────────────────────────────────────
 export function TrendsPage() {
   const navigate = useNavigate();
+  const { environment } = useEnvironment();
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [fullReports, setFullReports] = useState<ParsedReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -381,12 +383,18 @@ export function TrendsPage() {
     }
   };
 
+  // Everything on this page is scoped to the globally-selected environment first.
+  const envFullReports = useMemo(
+    () => fullReports.filter((r) => r.environment === environment),
+    [fullReports, environment],
+  );
+
   // The Latest Run row always shows one API card and one UI card side by side,
   // regardless of the report-type toggle below — so it needs its own strictly
   // API-only subset, separate from the toggle-driven "view" used everywhere else.
   const apiFullReports = useMemo(
-    () => fullReports.filter((r) => classifyReportKind(r) !== 'ui'),
-    [fullReports],
+    () => envFullReports.filter((r) => classifyReportKind(r) !== 'ui'),
+    [envFullReports],
   );
   const apiReports = useMemo(() => {
     const apiIds = new Set(apiFullReports.map((r) => r.id));
@@ -394,8 +402,8 @@ export function TrendsPage() {
   }, [reports, apiFullReports]);
 
   const uiFullReports = useMemo(
-    () => fullReports.filter((r) => classifyReportKind(r) === 'ui'),
-    [fullReports],
+    () => envFullReports.filter((r) => classifyReportKind(r) === 'ui'),
+    [envFullReports],
   );
   const uiReports = useMemo(() => {
     const uiIds = new Set(uiFullReports.map((r) => r.id));
@@ -405,8 +413,8 @@ export function TrendsPage() {
   // Everything below the Latest Run row (date range, avg rates, charts, heatmap,
   // top failures, all-reports table) reflects whichever kind is selected here.
   const viewFullReports = useMemo(
-    () => fullReports.filter((r) => classifyReportKind(r) === reportKind),
-    [fullReports, reportKind],
+    () => envFullReports.filter((r) => classifyReportKind(r) === reportKind),
+    [envFullReports, reportKind],
   );
   const viewReports = useMemo(() => {
     const viewIds = new Set(viewFullReports.map((r) => r.id));

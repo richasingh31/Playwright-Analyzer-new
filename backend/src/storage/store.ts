@@ -34,10 +34,11 @@ class InMemoryReportRepository implements IReportRepository {
 
   async findAll(): Promise<ReportSummary[]> {
     return Array.from(this.reports.values())
-      .map(({ id, name, uploadedAt, stats, metadata }) => ({
+      .map(({ id, name, uploadedAt, environment, stats, metadata }) => ({
         id,
         name,
         uploadedAt,
+        environment,
         stats,
         startTime: metadata?.startTime,
       }))

@@ -34,6 +34,7 @@ import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
 import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
+import { useEnvironment } from '../context/EnvironmentContext';
 import { exportRegressionsCSV, exportRegressionsSummaryCSV } from '../utils/csvExport';
 import { exportFailureAnalysisPDF } from '../utils/pdfExport';
 
@@ -688,6 +689,7 @@ function MetricCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function FailurePatternsPage() {
+  const { environment } = useEnvironment();
   const [allReports, setAllReports] = useState<ParsedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -708,8 +710,8 @@ export function FailurePatternsPage() {
   }, []);
 
   const reports = useMemo(
-    () => allReports.filter((r) => classifyReportKind(r) === reportKind),
-    [allReports, reportKind],
+    () => allReports.filter((r) => classifyReportKind(r) === reportKind && r.environment === environment),
+    [allReports, reportKind, environment],
   );
 
   const data = useMemo(

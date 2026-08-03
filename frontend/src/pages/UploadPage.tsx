@@ -9,6 +9,7 @@ import {
   Sparkles,
   Inbox,
   Clock,
+  Globe,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { reportsApi, ApiError } from '../api/client';
@@ -16,6 +17,7 @@ import type { ReportSummary } from '../types';
 import { Button } from '../components/ui/Button';
 import { timeAgo, formatDate, classifyReportKind } from '../utils/helpers';
 import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
+import { useEnvironment, ENVIRONMENTS } from '../context/EnvironmentContext';
 
 const STEPS = [
   { icon: FileText, title: 'Select', desc: 'Pick or drop your .xml report' },
@@ -52,6 +54,7 @@ function MiniBars({ seed }: { seed: string }) {
 
 export function UploadPage() {
   const navigate = useNavigate();
+  const { environment } = useEnvironment();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -59,6 +62,7 @@ export function UploadPage() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
+  const [uploadEnv, setUploadEnv] = useState(environment);
 
   const [recent, setRecent] = useState<ReportSummary[] | null>(null);
   const [recentKinds, setRecentKinds] = useState<Map<string, ReportKind>>(new Map());
@@ -84,7 +88,7 @@ export function UploadPage() {
   }, []);
 
   const filteredRecent = (recent ?? []).filter(
-    (r) => (recentKinds.get(r.id) ?? 'api') === reportKind,
+    (r) => (recentKinds.get(r.id) ?? 'api') === reportKind && r.environment === environment,
   );
 
   const accept = (f: File) => {
@@ -113,7 +117,7 @@ export function UploadPage() {
     setError('');
     setDuplicateId(null);
     try {
-      await reportsApi.upload(file, setProgress);
+      await reportsApi.upload(file, setProgress, uploadEnv);
       navigate('/trends');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
@@ -272,8 +276,26 @@ export function UploadPage() {
             </div>
           )}
 
-          {/* CTA */}
-          <div className="mt-5 flex justify-center">
+          {/* Environment + CTA */}
+          <div className="mt-5 flex flex-col items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
+                <Globe className="h-4 w-4 text-emerald-600" />
+                Environment
+              </label>
+              <select
+                value={uploadEnv}
+                onChange={(e) => setUploadEnv(e.target.value as typeof uploadEnv)}
+                disabled={uploading}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm focus:outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/15 disabled:opacity-50"
+              >
+                {ENVIRONMENTS.map((env) => (
+                  <option key={env} value={env}>
+                    {env}
+                  </option>
+                ))}
+              </select>
+            </div>
             <Button
               size="lg"
               onClick={handleUpload}
@@ -357,12 +379,12 @@ export function UploadPage() {
                 <p className="text-sm font-medium text-slate-600">
                   {recent.length === 0
                     ? 'No reports yet'
-                    : `No ${reportKind === 'ui' ? 'UI' : 'API'} test reports yet`}
+                    : `No ${reportKind === 'ui' ? 'UI' : 'API'} test reports in ${environment}`}
                 </p>
                 <p className="mt-1 text-xs text-slate-400 max-w-[16rem]">
                   {recent.length === 0
                     ? 'Upload your first Playwright JUnit XML report to see it show up here.'
-                    : `Reports classified as ${reportKind === 'ui' ? 'API' : 'UI'} tests are shown under the other filter.`}
+                    : `Switch the Environment dropdown in the nav bar, or upload a report tagged ${environment}.`}
                 </p>
               </div>
             )}

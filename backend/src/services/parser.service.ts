@@ -7,6 +7,7 @@ import type {
   TestStatus,
   ErrorCategory,
   ErrorGroup,
+  Environment,
   JUnitDocument,
   JUnitTestSuite,
   JUnitTestCase,
@@ -194,6 +195,7 @@ export async function parsePlaywrightReport(
   fileBuffer: Buffer,
   fileName: string,
   contentHash: string,
+  environment: Environment,
 ): Promise<ParsedReport> {
   const xml = fileBuffer.toString('utf-8');
 
@@ -242,6 +244,7 @@ export async function parsePlaywrightReport(
     name: fileName.replace(/\.xml$/i, ''),
     uploadedAt: new Date(),
     contentHash,
+    environment,
     stats: {
       total,
       passed,

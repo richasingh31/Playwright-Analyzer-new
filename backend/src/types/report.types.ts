@@ -1,3 +1,4 @@
+export type Environment = 'QA' | 'SIT' | 'PPE';
 export type TestStatus = 'passed' | 'failed' | 'skipped' | 'flaky';
 export type ErrorCategory =
   | 'assertion'
@@ -66,6 +67,7 @@ export interface ParsedReport {
   name: string;
   uploadedAt: Date;
   contentHash: string;
+  environment: Environment;
   stats: ReportStats;
   suites: TestSuite[];
   errorGroups: ErrorGroup[];
@@ -82,6 +84,7 @@ export interface ReportSummary {
   name: string;
   uploadedAt: Date;
   startTime?: number;
+  environment: Environment;
   stats: ReportStats;
 }
 

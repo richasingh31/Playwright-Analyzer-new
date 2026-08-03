@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, Upload, TrendingUp, Bug, Grid3X3, GitCompare, ShieldCheck, ChevronDown } from 'lucide-react';
+import { Activity, Upload, TrendingUp, Bug, Grid3X3, GitCompare, ShieldCheck, ChevronDown, Globe } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useEnvironment, ENVIRONMENTS } from '../../context/EnvironmentContext';
 
 const NAV = [
   {
@@ -37,6 +38,31 @@ const NAV = [
     active: 'bg-amber-100 text-amber-700 ring-1 ring-amber-200',
   },
 ];
+
+function EnvironmentSelect() {
+  const { environment, setEnvironment } = useEnvironment();
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600">
+        <Globe className="h-3.5 w-3.5" />
+        Environment
+      </span>
+      <select
+        value={environment}
+        onChange={(e) => setEnvironment(e.target.value as typeof environment)}
+        className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all duration-150 hover:shadow-md focus:outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/15"
+        title="Only reports uploaded to this environment are shown across the app"
+      >
+        {ENVIRONMENTS.map((env) => (
+          <option key={env} value={env}>
+            {env}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 function AdminMenu() {
   const [open, setOpen] = useState(false);
@@ -119,6 +145,8 @@ export function Navbar() {
               );
             })}
           </div>
+
+          <EnvironmentSelect />
         </div>
 
         <AdminMenu />

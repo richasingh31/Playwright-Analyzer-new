@@ -18,6 +18,7 @@ import {
 import { reportsApi } from '../api/client';
 import type { ParsedReport, TestResult, TestSuite, TestStatus } from '../types';
 import { formatDate, classifyReportKind } from '../utils/helpers';
+import { useEnvironment } from '../context/EnvironmentContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
@@ -590,6 +591,7 @@ function StatusFilterMenu({
 type StatusFilter = 'all' | TestStatus;
 
 export function ApiScenariosPage() {
+  const { environment } = useEnvironment();
   const [allReports, setAllReports] = useState<ParsedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -617,8 +619,8 @@ export function ApiScenariosPage() {
   }, []);
 
   const reports = useMemo(
-    () => allReports.filter((r) => classifyReportKind(r) === reportKind),
-    [allReports, reportKind],
+    () => allReports.filter((r) => classifyReportKind(r) === reportKind && r.environment === environment),
+    [allReports, reportKind, environment],
   );
 
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);

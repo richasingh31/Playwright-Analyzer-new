@@ -1,5 +1,5 @@
 import sql from 'mssql/msnodesqlv8';
-import type { ParsedReport, ReportSummary } from '../types/report.types';
+import type { ParsedReport, ReportSummary, Environment } from '../types/report.types';
 import type { IReportRepository } from './store';
 import { getPool } from './db';
 
@@ -15,6 +15,14 @@ interface ReportSummaryRow {
   stats_duration: number;
   stats_pass_rate: number;
   metadata_start_time: number | null;
+  environment: string;
+}
+
+// Reports saved before the environment column existed have no `environment` key
+// in their stored full_data JSON blob — treat those as QA (the only environment
+// that existed until now).
+function withEnvironmentFallback(report: ParsedReport): ParsedReport {
+  return { ...report, environment: (report.environment as Environment | undefined) ?? 'QA' };
 }
 
 export class SqlServerReportRepository implements IReportRepository {
@@ -26,6 +34,7 @@ export class SqlServerReportRepository implements IReportRepository {
       .input('name', sql.NVarChar(500), report.name)
       .input('uploaded_at', sql.DateTime2, report.uploadedAt)
       .input('content_hash', sql.Char(64), report.contentHash)
+      .input('environment', sql.NVarChar(10), report.environment)
       .input('stats_total', sql.Int, report.stats.total)
       .input('stats_passed', sql.Int, report.stats.passed)
       .input('stats_failed', sql.Int, report.stats.failed)
@@ -38,11 +47,11 @@ export class SqlServerReportRepository implements IReportRepository {
       .input('full_data', sql.NVarChar(sql.MAX), JSON.stringify(report))
       .query(`
         INSERT INTO reports
-          (id, name, uploaded_at, content_hash, stats_total, stats_passed, stats_failed,
+          (id, name, uploaded_at, content_hash, environment, stats_total, stats_passed, stats_failed,
            stats_skipped, stats_flaky, stats_duration, stats_pass_rate,
            metadata_start_time, metadata_workers, full_data)
         VALUES
-          (@id, @name, @uploaded_at, @content_hash, @stats_total, @stats_passed, @stats_failed,
+          (@id, @name, @uploaded_at, @content_hash, @environment, @stats_total, @stats_passed, @stats_failed,
            @stats_skipped, @stats_flaky, @stats_duration, @stats_pass_rate,
            @metadata_start_time, @metadata_workers, @full_data)
       `);
@@ -60,7 +69,7 @@ export class SqlServerReportRepository implements IReportRepository {
 
     const report = JSON.parse(result.recordset[0].full_data) as ParsedReport;
     report.uploadedAt = new Date(report.uploadedAt);
-    return report;
+    return withEnvironmentFallback(report);
   }
 
   async findByContentHash(contentHash: string): Promise<ParsedReport | null> {
@@ -74,13 +83,13 @@ export class SqlServerReportRepository implements IReportRepository {
 
     const report = JSON.parse(result.recordset[0].full_data) as ParsedReport;
     report.uploadedAt = new Date(report.uploadedAt);
-    return report;
+    return withEnvironmentFallback(report);
   }
 
   async findAll(): Promise<ReportSummary[]> {
     const pool = await getPool();
     const result = await pool.request().query<ReportSummaryRow>(`
-      SELECT id, name, uploaded_at,
+      SELECT id, name, uploaded_at, environment,
              stats_total, stats_passed, stats_failed, stats_skipped, stats_flaky,
              stats_duration, stats_pass_rate, metadata_start_time
       FROM reports
@@ -92,6 +101,7 @@ export class SqlServerReportRepository implements IReportRepository {
       name: row.name,
       uploadedAt: new Date(row.uploaded_at),
       startTime: row.metadata_start_time != null ? Number(row.metadata_start_time) : undefined,
+      environment: (row.environment as Environment) ?? 'QA',
       stats: {
         total: row.stats_total,
         passed: row.stats_passed,

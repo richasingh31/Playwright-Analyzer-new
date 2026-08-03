@@ -24,6 +24,7 @@ import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { formatDuration, classifyReportKind } from '../utils/helpers';
 import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { exportTenantComparisonPDF } from '../utils/pdfExport';
+import { useEnvironment } from '../context/EnvironmentContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -656,6 +657,7 @@ const COMPARE_TAB = '__compare__';
 
 export function TenantComparisonPage() {
   const navigate = useNavigate();
+  const { environment } = useEnvironment();
   const [allReports, setAllReports] = useState<ParsedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -679,8 +681,8 @@ export function TenantComparisonPage() {
   }, []);
 
   const reports = useMemo(
-    () => allReports.filter((r) => classifyReportKind(r) === 'api'),
-    [allReports],
+    () => allReports.filter((r) => classifyReportKind(r) === 'api' && r.environment === environment),
+    [allReports, environment],
   );
 
   // Reports listed newest-first for the report-scope dropdown.

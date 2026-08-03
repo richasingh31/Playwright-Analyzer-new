@@ -19,6 +19,7 @@ export async function runMigrations(): Promise<void> {
       stats_pass_rate     FLOAT          NOT NULL DEFAULT 0,
       metadata_start_time BIGINT         NULL,
       metadata_workers    INT            NULL,
+      environment         NVARCHAR(10)   NOT NULL DEFAULT 'QA',
       full_data           NVARCHAR(MAX)  NOT NULL,
       CONSTRAINT UQ_reports_content_hash UNIQUE (content_hash)
     )
@@ -30,6 +31,15 @@ export async function runMigrations(): Promise<void> {
       EXEC('UPDATE reports SET content_hash = CONVERT(CHAR(64), HASHBYTES(''SHA2_256'', CONVERT(NVARCHAR(MAX), id)), 2) WHERE content_hash IS NULL')
       ALTER TABLE reports ALTER COLUMN content_hash CHAR(64) NOT NULL
       ALTER TABLE reports ADD CONSTRAINT UQ_reports_content_hash UNIQUE (content_hash)
+    END
+  `);
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('reports') AND name = 'environment')
+    BEGIN
+      ALTER TABLE reports ADD environment NVARCHAR(10) NULL
+      EXEC('UPDATE reports SET environment = ''QA'' WHERE environment IS NULL')
+      ALTER TABLE reports ALTER COLUMN environment NVARCHAR(10) NOT NULL
+      ALTER TABLE reports ADD CONSTRAINT DF_reports_environment DEFAULT 'QA' FOR environment
     END
   `);
   console.log('Database migrations complete.');

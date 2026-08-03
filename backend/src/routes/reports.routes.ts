@@ -3,8 +3,15 @@ import multer from 'multer';
 import { createHash } from 'crypto';
 import { parsePlaywrightReport } from '../services/parser.service';
 import { reportRepository } from '../storage/store';
+import type { Environment } from '../types/report.types';
 
 const router = Router();
+
+const VALID_ENVIRONMENTS: Environment[] = ['QA', 'SIT', 'PPE'];
+
+function resolveEnvironment(value: unknown): Environment {
+  return VALID_ENVIRONMENTS.includes(value as Environment) ? (value as Environment) : 'QA';
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -47,10 +54,12 @@ router.post(
       return;
     }
 
+    const environment = resolveEnvironment(req.body.environment);
     const report = await parsePlaywrightReport(
       req.file.buffer,
       req.file.originalname,
       contentHash,
+      environment,
     );
     await reportRepository.save(report);
     res.status(201).json({ id: report.id, name: report.name, stats: report.stats });
