@@ -30,6 +30,11 @@ const config: sql.config = {
     trustedConnection: true,
     ...(instanceName ? { instanceName } : {}),
   },
+  // mssql defaults requestTimeout to 15s, which large reports (full_data is the
+  // whole parsed report as JSON, stored in one NVARCHAR(MAX) insert) can exceed —
+  // that's what throws "query timeout expired". Give inserts more headroom.
+  requestTimeout: Number(process.env.DB_REQUEST_TIMEOUT_MS ?? 60000),
+  connectionTimeout: Number(process.env.DB_CONNECTION_TIMEOUT_MS ?? 30000),
   pool: {
     max: 10,
     min: 0,
