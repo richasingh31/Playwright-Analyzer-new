@@ -21,6 +21,8 @@ import { StatusBadge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
+import { ExportPDFButton } from '../components/ui/ExportPDFButton';
+import { exportDrillDownPDF } from '../utils/pdfExport';
 import { clsx } from 'clsx';
 
 // ── Error category filter pills ───────────────────────────────────────────────
@@ -251,6 +253,23 @@ export function DrillDownPage() {
             </span>
           </h1>
         </div>
+        <ExportPDFButton
+          onClick={() =>
+            exportDrillDownPDF({
+              reportName: report.name,
+              statusLabel: cfg.label,
+              errorFilterLabel: errorFilter ? ERROR_CATEGORY_CONFIG[errorFilter as ErrorCategory].label : undefined,
+              tests: filtered.map((t) => ({
+                title: t.title,
+                file: t.file,
+                duration: t.duration,
+                retries: t.retries,
+                errorCategory: t.error?.category,
+                errorMessage: t.error?.message,
+              })),
+            })
+          }
+        />
       </div>
 
       {/* Error category filter (only for failed/flaky) */}

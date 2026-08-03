@@ -22,6 +22,8 @@ import { TenantStatusPieChart } from '../components/charts/TenantStatusPieChart'
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { formatDuration, classifyReportKind } from '../utils/helpers';
+import { ExportPDFButton } from '../components/ui/ExportPDFButton';
+import { exportTenantComparisonPDF } from '../utils/pdfExport';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -826,6 +828,32 @@ export function TenantComparisonPage() {
               : 'Per-tenant pass/fail breakdown by API and test case — switch tabs to compare'}
           </p>
         </div>
+        <ExportPDFButton
+          onClick={() =>
+            exportTenantComparisonPDF({
+              dimensionLabelPlural,
+              reportCount: reports.length,
+              tenants,
+              tenantLabels: Object.fromEntries(tenantLabels),
+              stats,
+              groups: grouped.map(([apiName, scenarios]) => ({
+                apiName,
+                scenarios: scenarios.map((s) => ({
+                  title: s.title,
+                  isDivergent: s.isDivergent,
+                  statusByTenant: Object.fromEntries(
+                    tenants.map((t) => {
+                      const status = s.tenantStatuses.get(t)?.status;
+                      const label =
+                        status === 'passed' ? 'Pass' : status === 'failed' ? 'Fail' : status === 'flaky' ? 'Flaky' : status === 'skipped' ? 'Skip' : '—';
+                      return [t, label];
+                    }),
+                  ),
+                })),
+              })),
+            })
+          }
+        />
       </div>
 
       {/* Summary cards */}

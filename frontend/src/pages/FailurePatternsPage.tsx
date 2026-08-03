@@ -12,6 +12,7 @@ import {
   XCircle,
   Maximize2,
   Minimize2,
+  Download,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -29,15 +30,18 @@ import type { ParsedReport } from '../types';
 import { flattenTests, formatDate, classifyReportKind } from '../utils/helpers';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
 import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
+import { exportRegressionsCSV } from '../utils/csvExport';
+import { exportFailureAnalysisPDF } from '../utils/pdfExport';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CellStatus = 'passed' | 'failed' | 'flaky' | 'skipped' | 'missing';
 
-interface RegressionItem {
+export interface RegressionItem {
   testKey: string;
   testLabel: string;
   file: string;
@@ -60,7 +64,7 @@ interface FlakyStat {
   failed: number;
 }
 
-interface SuiteHealth {
+export interface SuiteHealth {
   suiteName: string;
   passed: number;
   failed: number;
@@ -68,7 +72,7 @@ interface SuiteHealth {
   failRate: number;
 }
 
-interface ErrorEvoEntry {
+export interface ErrorEvoEntry {
   date: string;
   Assertion: number;
   Timeout: number;
@@ -487,14 +491,26 @@ function RegressionSection({
             : 'Tests that passed in the previous run but failed in the latest run'
         }
         action={
-          expandableKeys.length > 0 ? (
-            <button
-              onClick={toggleAll}
-              className="flex items-center gap-1.5 rounded-lg bg-slate-100/60 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 transition-colors"
-            >
-              {allExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-              {allExpanded ? 'Collapse all' : 'Expand all'}
-            </button>
+          hasRegressions ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => exportRegressionsCSV(regressions, prevDate, latestDate)}
+                className="flex items-center gap-1.5 rounded-lg bg-slate-100/60 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+                title="Download newly broken tests as CSV"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download CSV
+              </button>
+              {expandableKeys.length > 0 && (
+                <button
+                  onClick={toggleAll}
+                  className="flex items-center gap-1.5 rounded-lg bg-slate-100/60 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+                >
+                  {allExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  {allExpanded ? 'Collapse all' : 'Expand all'}
+                </button>
+              )}
+            </div>
           ) : undefined
         }
       />
@@ -687,6 +703,22 @@ export function FailurePatternsPage() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <ReportKindSelect value={reportKind} onChange={setReportKind} />
+          <ExportPDFButton
+            label="Download PDF"
+            onClick={() =>
+              exportFailureAnalysisPDF({
+                reportCount: reports.length,
+                reportKindLabel: reportKind === 'ui' ? 'UI' : 'API',
+                regressions,
+                regressionPrevDate,
+                regressionLatestDate,
+                consistentlyFailing,
+                flakyCount,
+                suiteHealth,
+                errorEvolution,
+              })
+            }
+          />
         </div>
       </div>
 

@@ -19,6 +19,8 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { ExecutiveSummary } from '../components/analysis/ExecutiveSummary';
+import { ExportPDFButton } from '../components/ui/ExportPDFButton';
+import { exportAnalysisPDF } from '../utils/pdfExport';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 
@@ -108,6 +110,7 @@ export function AnalysisPage() {
             )}
           </div>
         </div>
+        <ExportPDFButton onClick={() => exportAnalysisPDF(report)} />
       </div>
 
       {/* Executive summary */}

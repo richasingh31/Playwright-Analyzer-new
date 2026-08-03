@@ -1,5 +1,6 @@
 import type { jsPDF as JsPDFType } from 'jspdf';
 import type { ParsedReport, ReportSummary } from '../types';
+import type { RegressionItem, SuiteHealth, ErrorEvoEntry } from '../pages/FailurePatternsPage';
 import { formatDuration, formatDate } from './helpers';
 
 // ── Colour palette (RGB tuples) ───────────────────────────────────────────────
@@ -42,6 +43,16 @@ export function getQualityGrade(passRate: number, flaky: number, total: number) 
 
 // ── Table drawing helper ──────────────────────────────────────────────────────
 
+function truncateCell(pdf: JsPDFType, text: string, maxWidth: number): string {
+  const lines = pdf.splitTextToSize(text, maxWidth);
+  if (lines.length <= 1) return lines[0] ?? '';
+  let line = lines[0];
+  while (line.length > 1 && pdf.getTextWidth(line + '…') > maxWidth) {
+    line = line.slice(0, -1);
+  }
+  return line.replace(/\s+$/, '') + '…';
+}
+
 function drawTable(
   pdf: JsPDFType,
   headers: string[],
@@ -66,15 +77,17 @@ function drawTable(
   headers.forEach((h, i) => { pdf.text(h, cx + PAD, y + 5.5); cx += colWidths[i]; });
   y += H_ROW;
 
+  let drawnRows = 0;
   rows.forEach((row, ri) => {
     if (y + D_ROW > maxY) return;
+    drawnRows++;
     if (ri % 2 === 0) { sf(pdf, C.light); pdf.rect(x, y, totalW, D_ROW, 'F'); }
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(7.5);
     st(pdf, C.text);
     cx = x;
     row.forEach((cell, ci) => {
-      const t = pdf.splitTextToSize(String(cell), colWidths[ci] - PAD * 2)[0] ?? '';
+      const t = truncateCell(pdf, String(cell), colWidths[ci] - PAD * 2);
       pdf.text(t, cx + PAD, y + 5);
       cx += colWidths[ci];
     });
@@ -83,7 +96,7 @@ function drawTable(
 
   sd(pdf, C.border);
   pdf.setLineWidth(0.3);
-  pdf.rect(x, startY, totalW, H_ROW + rows.length * D_ROW, 'S');
+  pdf.rect(x, startY, totalW, H_ROW + drawnRows * D_ROW, 'S');
   return y + 4;
 }
 
@@ -114,6 +127,18 @@ function addFooter(pdf: JsPDFType, page: number, total: number, pageW: number) {
     `Page ${page} of ${total}  ·  PlaywrightAnalyzer  ·  Confidential`,
     pageW / 2, 292, { align: 'center' },
   );
+}
+
+// ── Plain footer (page number only, no branding/confidentiality mark) ────────
+
+function addPlainFooter(pdf: JsPDFType, page: number, total: number, pageW: number) {
+  sd(pdf, C.border);
+  pdf.setLineWidth(0.3);
+  pdf.line(15, 287, pageW - 15, 287);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(7);
+  st(pdf, C.muted);
+  pdf.text(`Page ${page} of ${total}`, pageW / 2, 292, { align: 'center' });
 }
 
 // ── Page 2+ mini-header ───────────────────────────────────────────────────────
@@ -524,4 +549,489 @@ export async function exportTrendsPDF(reports: ReportSummary[]): Promise<void> {
   for (let i = 1; i <= pages; i++) { pdf.setPage(i); addFooter(pdf, i, pages, PAGE_W); }
 
   pdf.save('playwright_trends_report.pdf');
+}
+
+// ── Export Failure Analysis PDF (whole Analysis/Failures page) ───────────────
+
+export interface FailureAnalysisPDFInput {
+  reportCount: number;
+  reportKindLabel: string;
+  regressions: RegressionItem[];
+  regressionPrevDate: string;
+  regressionLatestDate: string;
+  consistentlyFailing: number;
+  flakyCount: number;
+  suiteHealth: SuiteHealth[];
+  errorEvolution: ErrorEvoEntry[];
+}
+
+export async function exportFailureAnalysisPDF(input: FailureAnalysisPDFInput): Promise<void> {
+  const {
+    reportCount, reportKindLabel, regressions, regressionPrevDate, regressionLatestDate,
+    consistentlyFailing, flakyCount, suiteHealth, errorEvolution,
+  } = input;
+
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' }) as unknown as JsPDFType;
+
+  const PAGE_W = 210;
+  const M      = 15;
+  const CONT_W = PAGE_W - 2 * M;
+  const MAX_Y  = 278;
+
+  // ── Cover header ─────────────────────────────────────────────────────────────
+  sf(pdf, C.header);
+  pdf.rect(0, 0, PAGE_W, 42, 'F');
+  sf(pdf, C.accent);
+  pdf.rect(0, 0, 4, 42, 'F');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(17);
+  st(pdf, C.white);
+  pdf.text('Failure Analysis Report', 12, 19);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  st(pdf, C.mutedBg);
+  pdf.text(
+    `${reportKindLabel} · Cross-run analysis across ${reportCount} report${reportCount !== 1 ? 's' : ''}`,
+    12, 29,
+  );
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  st(pdf, C.mutedBg);
+  const genLabel = `Generated ${formatDate(new Date().toISOString())}`;
+  pdf.text(genLabel, PAGE_W - 12 - pdf.getTextWidth(genLabel), 29);
+
+  let y = 54;
+
+  // ── Key Metrics ───────────────────────────────────────────────────────────────
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  st(pdf, C.text);
+  pdf.text('Key Metrics', M, y);
+  y += 6;
+
+  const metrics: Array<{ label: string; value: string; rgb: RGB }> = [
+    { label: 'Newly Broken', value: String(regressions.length), rgb: regressions.length > 0 ? C.flaky : C.passed },
+    { label: 'Always Failing', value: String(consistentlyFailing), rgb: C.failed },
+    { label: 'Flaky Tests', value: String(flakyCount), rgb: C.flaky },
+  ];
+
+  const GAP = 6;
+  const boxW = Math.min(56, (CONT_W - GAP * (metrics.length - 1)) / metrics.length);
+  const groupW = boxW * metrics.length + GAP * (metrics.length - 1);
+  const groupX = M + (CONT_W - groupW) / 2;
+  metrics.forEach(({ label, value, rgb }, i) => {
+    const bx = groupX + i * (boxW + GAP);
+    sf(pdf, C.light);
+    pdf.roundedRect(bx, y, boxW, 20, 2, 2, 'F');
+    sd(pdf, C.border);
+    pdf.setLineWidth(0.3);
+    pdf.roundedRect(bx, y, boxW, 20, 2, 2, 'S');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(13);
+    st(pdf, rgb);
+    const vw = pdf.getTextWidth(value);
+    pdf.text(value, bx + boxW / 2 - vw / 2, y + 10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7);
+    st(pdf, C.muted);
+    const lw = pdf.getTextWidth(label);
+    pdf.text(label, bx + boxW / 2 - lw / 2, y + 16.5);
+  });
+  y += 30;
+
+  // ── Newly Broken Tests ────────────────────────────────────────────────────────
+  y = sectionHeading(pdf, 'Newly Broken Tests', M, y, PAGE_W);
+  if (!regressionPrevDate) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.5);
+    st(pdf, C.muted);
+    pdf.text('Upload at least 2 reports from different dates to detect regressions.', M, y);
+    y += 10;
+  } else if (regressions.length === 0) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.5);
+    st(pdf, C.passed);
+    pdf.text(`No regressions detected since ${regressionPrevDate}.`, M, y);
+    y += 10;
+  } else {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    st(pdf, C.muted);
+    pdf.text(
+      `${regressions.length} test(s) passed on ${regressionPrevDate} but failed on ${regressionLatestDate}.`,
+      M, y,
+    );
+    y += 6;
+    let rows = regressions.map((r) => [
+      r.testLabel,
+      r.file.split(/[\\/]/).slice(-2).join('/'),
+      r.errorCategory,
+      r.errorMessage.split('\n')[0],
+    ]);
+
+    // Avoid overflowing the page: if the full list won't fit, show as many as
+    // fit and point to the CSV export (which always has the complete list).
+    const maxRows = Math.max(0, Math.floor((MAX_Y - y - 8) / 7));
+    if (rows.length > maxRows) {
+      const kept = rows.slice(0, Math.max(0, maxRows - 1));
+      const remaining = rows.length - kept.length;
+      rows = [...kept, [`+ ${remaining} more — use "Download CSV" for the full list`, '', '', '']];
+    }
+
+    y = drawTable(pdf, ['Test', 'File', 'Category', 'Error Message'], rows, M, y, [50, 40, 24, 66], MAX_Y);
+  }
+
+  // ── Suite Health ──────────────────────────────────────────────────────────────
+  if (y > 228) { pdf.addPage(); y = 20; }
+  y = sectionHeading(pdf, 'Suite Health', M, y, PAGE_W);
+  if (suiteHealth.length === 0) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.5);
+    st(pdf, C.muted);
+    pdf.text('No suite failures detected.', M, y);
+    y += 10;
+  } else {
+    const rows = suiteHealth.map((s) => [
+      s.suiteName,
+      String(s.total),
+      String(s.failed),
+      `${s.failRate}%`,
+    ]);
+    y = drawTable(pdf, ['Suite Name', 'Total', 'Failed', 'Fail Rate'], rows, M, y, [90, 30, 30, 30], MAX_Y);
+  }
+
+  // ── Failure Types by Run ──────────────────────────────────────────────────────
+  if (y > 228) { pdf.addPage(); y = 20; }
+  y = sectionHeading(pdf, 'Failure Types by Run', M, y, PAGE_W);
+  const hasErrors = errorEvolution.some(
+    (e) => e.Assertion + e.Timeout + e.Network + e.Element + e.Runtime + e.Application > 0,
+  );
+  if (errorEvolution.length < 2 || !hasErrors) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.5);
+    st(pdf, C.muted);
+    pdf.text(
+      errorEvolution.length < 2
+        ? 'Upload at least 2 reports to compare failure types.'
+        : 'No categorised errors found.',
+      M, y,
+    );
+    y += 10;
+  } else {
+    const rows = errorEvolution.map((e) => [
+      e.date,
+      String(e.Assertion),
+      String(e.Timeout),
+      String(e.Network),
+      String(e.Element),
+      String(e.Runtime),
+      String(e.Application),
+    ]);
+    drawTable(
+      pdf,
+      ['Date', 'Assertion', 'Timeout', 'Network', 'Element', 'Runtime', 'Application'],
+      rows, M, y, [30, 25, 25, 25, 25, 25, 25], MAX_Y,
+    );
+  }
+
+  // ── Footers ───────────────────────────────────────────────────────────────────
+  const pages = pdf.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) { pdf.setPage(i); addPlainFooter(pdf, i, pages, PAGE_W); }
+
+  pdf.save(`failure_analysis_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+// ── Export API Scenarios PDF ──────────────────────────────────────────────────
+
+export interface ScenariosPDFInput {
+  reportKindLabel: string;
+  reportCount: number;
+  totals: { apis: number; scenarios: number; passed: number; failed: number; flaky: number; skipped: number };
+  groups: Array<{
+    apiName: string;
+    total: number;
+    passCount: number;
+    failCount: number;
+    flakyCount: number;
+    scenarios: Array<{ title: string; latestStatus: string; failCount: number }>;
+  }>;
+}
+
+export async function exportScenariosPDF(input: ScenariosPDFInput): Promise<void> {
+  const { reportKindLabel, reportCount, totals, groups } = input;
+
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' }) as unknown as JsPDFType;
+
+  const PAGE_W = 210;
+  const M      = 15;
+  const CONT_W = PAGE_W - 2 * M;
+  const MAX_Y  = 278;
+
+  sf(pdf, C.header);
+  pdf.rect(0, 0, PAGE_W, 42, 'F');
+  sf(pdf, C.accent);
+  pdf.rect(0, 0, 4, 42, 'F');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(17);
+  st(pdf, C.white);
+  pdf.text('API Scenarios Report', 12, 19);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  st(pdf, C.mutedBg);
+  pdf.text(`${reportKindLabel} · ${reportCount} report${reportCount !== 1 ? 's' : ''}`, 12, 29);
+
+  const genLabel = `Generated ${formatDate(new Date().toISOString())}`;
+  pdf.text(genLabel, PAGE_W - 12 - pdf.getTextWidth(genLabel), 29);
+
+  let y = 54;
+
+  // ── Key Metrics ───────────────────────────────────────────────────────────────
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  st(pdf, C.text);
+  pdf.text('Key Metrics', M, y);
+  y += 6;
+
+  const metrics: Array<{ label: string; value: string; rgb: RGB }> = [
+    { label: 'APIs',      value: String(totals.apis),      rgb: C.text   },
+    { label: 'Scenarios', value: String(totals.scenarios), rgb: C.text   },
+    { label: 'Passed',    value: String(totals.passed),    rgb: C.passed },
+    { label: 'Failed',    value: String(totals.failed),    rgb: C.failed },
+    { label: 'Flaky',     value: String(totals.flaky),     rgb: C.flaky  },
+    { label: 'Skipped',   value: String(totals.skipped),   rgb: C.skipped},
+  ];
+
+  const boxW = CONT_W / metrics.length;
+  metrics.forEach(({ label, value, rgb }, i) => {
+    const bx = M + i * boxW;
+    sf(pdf, C.light);
+    pdf.roundedRect(bx, y, boxW - 2, 18, 1.5, 1.5, 'F');
+    sd(pdf, C.border);
+    pdf.setLineWidth(0.3);
+    pdf.roundedRect(bx, y, boxW - 2, 18, 1.5, 1.5, 'S');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    st(pdf, rgb);
+    const vw = pdf.getTextWidth(value);
+    pdf.text(value, bx + (boxW - 2) / 2 - vw / 2, y + 9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(6.5);
+    st(pdf, C.muted);
+    const lw = pdf.getTextWidth(label);
+    pdf.text(label, bx + (boxW - 2) / 2 - lw / 2, y + 15);
+  });
+  y += 28;
+
+  // ── One section per API group ─────────────────────────────────────────────────
+  groups.forEach((group) => {
+    if (y > 228) { pdf.addPage(); y = 20; }
+    y = sectionHeading(
+      pdf,
+      `${group.apiName}  (${group.passCount} passed · ${group.failCount} failed · ${group.flakyCount} flaky)`,
+      M, y, PAGE_W,
+    );
+    const rows = group.scenarios.map((s) => [s.title, s.latestStatus, String(s.failCount)]);
+    y = drawTable(pdf, ['Scenario', 'Latest Status', 'Fail Count'], rows, M, y, [126, 34, 30], MAX_Y);
+  });
+
+  // ── Footers ───────────────────────────────────────────────────────────────────
+  const pages = pdf.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) { pdf.setPage(i); addFooter(pdf, i, pages, PAGE_W); }
+
+  pdf.save(`api_scenarios_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+// ── Export Tenant Comparison PDF ──────────────────────────────────────────────
+
+export interface TenantComparisonPDFInput {
+  dimensionLabelPlural: string;
+  reportCount: number;
+  tenants: string[];
+  tenantLabels: Record<string, string>;
+  stats: { totalScenarios: number; allPassing: number; allFailing: number; divergent: number };
+  groups: Array<{
+    apiName: string;
+    scenarios: Array<{
+      title: string;
+      isDivergent: boolean;
+      statusByTenant: Record<string, string>; // tenantKey -> status label (e.g. "pass", "fail", "-")
+    }>;
+  }>;
+}
+
+export async function exportTenantComparisonPDF(input: TenantComparisonPDFInput): Promise<void> {
+  const { dimensionLabelPlural, reportCount, tenants, tenantLabels, stats, groups } = input;
+
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' }) as unknown as JsPDFType;
+
+  const PAGE_W = 297;
+  const M      = 15;
+  const CONT_W = PAGE_W - 2 * M;
+  const MAX_Y  = 190;
+
+  sf(pdf, C.header);
+  pdf.rect(0, 0, PAGE_W, 42, 'F');
+  sf(pdf, C.accent);
+  pdf.rect(0, 0, 4, 42, 'F');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(17);
+  st(pdf, C.white);
+  pdf.text('Tenant Comparison Report', 12, 19);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  st(pdf, C.mutedBg);
+  pdf.text(
+    `${tenants.length} ${dimensionLabelPlural} · ${reportCount} report${reportCount !== 1 ? 's' : ''}`,
+    12, 29,
+  );
+
+  const genLabel = `Generated ${formatDate(new Date().toISOString())}`;
+  pdf.text(genLabel, PAGE_W - 12 - pdf.getTextWidth(genLabel), 29);
+
+  let y = 54;
+
+  // ── Key Metrics ───────────────────────────────────────────────────────────────
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  st(pdf, C.text);
+  pdf.text('Key Metrics', M, y);
+  y += 6;
+
+  const metrics: Array<{ label: string; value: string; rgb: RGB }> = [
+    { label: 'Scenarios',     value: String(stats.totalScenarios), rgb: C.text   },
+    { label: 'All Passing',   value: String(stats.allPassing),     rgb: C.passed },
+    { label: 'All Failing',   value: String(stats.allFailing),     rgb: C.failed },
+    { label: 'Divergent',     value: String(stats.divergent),      rgb: C.flaky  },
+  ];
+
+  const GAP = 6;
+  const boxW = Math.min(56, (CONT_W - GAP * (metrics.length - 1)) / metrics.length);
+  const groupW = boxW * metrics.length + GAP * (metrics.length - 1);
+  const groupX = M + (CONT_W - groupW) / 2;
+  metrics.forEach(({ label, value, rgb }, i) => {
+    const bx = groupX + i * (boxW + GAP);
+    sf(pdf, C.light);
+    pdf.roundedRect(bx, y, boxW, 20, 2, 2, 'F');
+    sd(pdf, C.border);
+    pdf.setLineWidth(0.3);
+    pdf.roundedRect(bx, y, boxW, 20, 2, 2, 'S');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(13);
+    st(pdf, rgb);
+    const vw = pdf.getTextWidth(value);
+    pdf.text(value, bx + boxW / 2 - vw / 2, y + 10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7);
+    st(pdf, C.muted);
+    const lw = pdf.getTextWidth(label);
+    pdf.text(label, bx + boxW / 2 - lw / 2, y + 16.5);
+  });
+  y += 30;
+
+  // ── One table per API group: Scenario | <tenant columns> ─────────────────────
+  const tenantColW = Math.min(30, (CONT_W - 90) / Math.max(tenants.length, 1));
+  const headers = ['Scenario', ...tenants.map((t) => tenantLabels[t] ?? t)];
+  const colWidths = [90, ...tenants.map(() => tenantColW)];
+
+  groups.forEach((group) => {
+    if (y > MAX_Y - 20) { pdf.addPage(); y = 20; }
+    y = sectionHeading(pdf, group.apiName, M, y, PAGE_W);
+    const rows = group.scenarios.map((s) => [
+      s.isDivergent ? `${s.title} ⚠` : s.title,
+      ...tenants.map((t) => s.statusByTenant[t] ?? '—'),
+    ]);
+    y = drawTable(pdf, headers, rows, M, y, colWidths, MAX_Y);
+  });
+
+  // ── Footers ───────────────────────────────────────────────────────────────────
+  const pages = pdf.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) { pdf.setPage(i); addFooter(pdf, i, pages, PAGE_W); }
+
+  pdf.save(`tenant_comparison_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+// ── Export Drill-Down PDF ─────────────────────────────────────────────────────
+
+export interface DrillDownPDFInput {
+  reportName: string;
+  statusLabel: string;
+  errorFilterLabel?: string;
+  tests: Array<{
+    title: string;
+    file: string;
+    duration: number;
+    retries: number;
+    errorCategory?: string;
+    errorMessage?: string;
+  }>;
+}
+
+export async function exportDrillDownPDF(input: DrillDownPDFInput): Promise<void> {
+  const { reportName, statusLabel, errorFilterLabel, tests } = input;
+
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' }) as unknown as JsPDFType;
+
+  const PAGE_W = 210;
+  const M      = 15;
+  const CONT_W = PAGE_W - 2 * M;
+  const MAX_Y  = 278;
+
+  sf(pdf, C.header);
+  pdf.rect(0, 0, PAGE_W, 42, 'F');
+  sf(pdf, C.accent);
+  pdf.rect(0, 0, 4, 42, 'F');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(17);
+  st(pdf, C.white);
+  pdf.text(`${statusLabel} Tests`, 12, 19);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  st(pdf, C.mutedBg);
+  pdf.text(
+    `${reportName}${errorFilterLabel ? ` · Filtered by ${errorFilterLabel}` : ''} · ${tests.length} test${tests.length !== 1 ? 's' : ''}`,
+    12, 29,
+  );
+
+  const genLabel = `Generated ${formatDate(new Date().toISOString())}`;
+  pdf.text(genLabel, PAGE_W - 12 - pdf.getTextWidth(genLabel), 29);
+
+  let y = 54;
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  st(pdf, C.text);
+  pdf.text(`${tests.length} test${tests.length !== 1 ? 's' : ''} total`, M, y);
+  const totalDuration = tests.reduce((s, t) => s + t.duration, 0);
+  const durLabel = `Total duration: ${formatDuration(totalDuration)}`;
+  pdf.text(durLabel, M + CONT_W - pdf.getTextWidth(durLabel), y);
+  y += 8;
+
+  const rows = tests.map((t) => [
+    t.title,
+    t.file,
+    formatDuration(t.duration),
+    String(t.retries),
+    t.errorMessage ? `${t.errorCategory ? `[${t.errorCategory}] ` : ''}${t.errorMessage.split('\n')[0]}` : '—',
+  ]);
+  drawTable(pdf, ['Test', 'File', 'Duration', 'Retries', 'Error'], rows, M, y, [42, 34, 20, 18, 66], MAX_Y);
+
+  // ── Footers ───────────────────────────────────────────────────────────────────
+  const pages = pdf.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) { pdf.setPage(i); addFooter(pdf, i, pages, PAGE_W); }
+
+  const safeStatus = statusLabel.replace(/[^a-zA-Z0-9\-_]/g, '_');
+  pdf.save(`${safeStatus}_tests_${new Date().toISOString().slice(0, 10)}.pdf`);
 }

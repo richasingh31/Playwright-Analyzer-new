@@ -35,6 +35,8 @@ import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
 import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
+import { ExportPDFButton } from '../components/ui/ExportPDFButton';
+import { exportTrendsPDF } from '../utils/pdfExport';
 
 function reportTime(r: ReportSummary): number {
   return r.startTime ?? new Date(r.uploadedAt).getTime();
@@ -512,6 +514,9 @@ export function TrendsPage() {
         <div>
           <h1 className="text-2xl font-extrabold uppercase tracking-wide text-slate-900">Trends</h1>
         </div>
+        {filteredReports.length > 0 && (
+          <ExportPDFButton onClick={() => exportTrendsPDF(filteredReports)} />
+        )}
       </div>
 
       {/* Latest run snapshot — API vs UI test breakdown, independent of the date filter below */}

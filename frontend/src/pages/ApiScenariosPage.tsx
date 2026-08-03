@@ -23,6 +23,8 @@ import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
 import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
+import { ExportPDFButton } from '../components/ui/ExportPDFButton';
+import { exportScenariosPDF } from '../utils/pdfExport';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -824,6 +826,27 @@ export function ApiScenariosPage() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <ReportKindSelect value={reportKind} onChange={setReportKind} />
+          <ExportPDFButton
+            onClick={() =>
+              exportScenariosPDF({
+                reportKindLabel: reportKind === 'ui' ? 'UI Tests' : 'API Tests',
+                reportCount: dateFilteredReports.length,
+                totals,
+                groups: filtered.map((g) => ({
+                  apiName: g.apiName,
+                  total: g.total,
+                  passCount: g.passCount,
+                  failCount: g.failCount,
+                  flakyCount: g.flakyCount,
+                  scenarios: g.scenarios.map((s) => ({
+                    title: s.title,
+                    latestStatus: s.latestStatus,
+                    failCount: s.failCount,
+                  })),
+                })),
+              })
+            }
+          />
         </div>
       </div>
 
@@ -969,9 +992,8 @@ export function ApiScenariosPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((group, i) => {
-            const defaultOpen = i === 0 || group.failCount > 0;
-            const isOpen = openOverrides[group.apiKey] ?? defaultOpen;
+          {filtered.map((group) => {
+            const isOpen = openOverrides[group.apiKey] ?? false;
             return (
               <ApiGroupBlock
                 key={group.apiKey}
