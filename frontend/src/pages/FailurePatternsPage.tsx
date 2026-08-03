@@ -34,7 +34,7 @@ import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
 import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
-import { exportRegressionsCSV } from '../utils/csvExport';
+import { exportRegressionsCSV, exportRegressionsSummaryCSV } from '../utils/csvExport';
 import { exportFailureAnalysisPDF } from '../utils/pdfExport';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -568,10 +568,18 @@ function RegressionSection({
               <button
                 onClick={() => exportRegressionsCSV(regressions, prevDate, latestDate)}
                 className="flex items-center gap-1.5 rounded-lg bg-slate-100/60 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 transition-colors"
-                title="Download newly broken tests as CSV"
+                title="Download newly broken tests with full error details as CSV"
               >
                 <Download className="h-3.5 w-3.5" />
                 Download CSV
+              </button>
+              <button
+                onClick={() => exportRegressionsSummaryCSV(regressions, prevDate, latestDate)}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                title="Download just the API/test name and its pass/fail status for the two compared dates"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Excel (API + Pass/Fail)
               </button>
               {expandableKeys.length > 0 && (
                 <button

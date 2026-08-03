@@ -51,3 +51,17 @@ export function exportRegressionsCSV(
   const dateRange = prevDate && latestDate ? `${prevDate}_to_${latestDate}` : new Date().toISOString().slice(0, 10);
   downloadCSV(`newly_broken_tests_${dateRange}.csv`, headers, rows);
 }
+
+// Minimal Excel-friendly export: just the API/test name and its pass/fail status
+// on the two compared dates — no error details or stack traces.
+export function exportRegressionsSummaryCSV(
+  regressions: RegressionItem[],
+  prevDate: string,
+  latestDate: string,
+): void {
+  const headers = ['API / Test', prevDate || 'Day 1', latestDate || 'Day 2'];
+  const rows = regressions.map((r) => [r.testKey, 'Passed', 'Failed']);
+
+  const dateRange = prevDate && latestDate ? `${prevDate}_to_${latestDate}` : new Date().toISOString().slice(0, 10);
+  downloadCSV(`newly_broken_tests_summary_${dateRange}.csv`, headers, rows);
+}
