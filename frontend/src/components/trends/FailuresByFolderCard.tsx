@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ChevronRight, X, XCircle, CalendarRange } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Maximize2, Minimize2, X, XCircle, CalendarRange } from 'lucide-react';
 import type { ParsedReport } from '../../types';
 import { flattenTests, formatDate } from '../../utils/helpers';
 import { Card, CardHeader } from '../ui/Card';
@@ -12,9 +12,20 @@ interface FolderLeafTest {
   title: string;
   status: CellStatus;
   errorMessage?: string;
+  errorStack?: string;
+  errorCategory?: string;
   reportName: string;
   reportDate: string;
 }
+
+const CATEGORY_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  assertion:            { label: 'Assertion',    color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)' },
+  timeout:              { label: 'Timeout',      color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.3)' },
+  network:               { label: 'Network',      color: '#3b82f6', bg: 'rgba(59,130,246,0.1)',  border: 'rgba(59,130,246,0.3)' },
+  'element-not-found':   { label: 'Element',      color: '#a855f7', bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.3)' },
+  runtime:               { label: 'Runtime',      color: '#ec4899', bg: 'rgba(236,72,153,0.1)',  border: 'rgba(236,72,153,0.3)' },
+  application:           { label: 'Application',  color: '#64748b', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.3)' },
+};
 
 interface FolderTreeNode {
   name: string;
@@ -84,10 +95,12 @@ function buildFolderNode(
       name,
       fullPath: path,
       size: stats.total,
-      tests: tests.map(({ title, status, errorMessage, reportName, reportDate }) => ({
+      tests: tests.map(({ title, status, errorMessage, errorStack, errorCategory, reportName, reportDate }) => ({
         title,
         status,
         errorMessage,
+        errorStack,
+        errorCategory,
         reportName,
         reportDate,
       })),
@@ -147,6 +160,8 @@ function buildFolderTree(reports: ParsedReport[]): FolderTreeNode[] {
         title: t.title,
         status: t.status as CellStatus,
         errorMessage: t.error?.message,
+        errorStack: t.error?.stack,
+        errorCategory: t.error?.category,
         reportName: report.name,
         reportDate: reportShortDate(report),
         segments: parts,
@@ -203,6 +218,22 @@ function FolderCard({ node, onOpen }: { node: FolderTreeNode; onOpen: (node: Fol
 
 function FolderDetailPanel({ node, onClose, showRunLabels }: { node: FolderTreeNode; onClose: () => void; showRunLabels: boolean }) {
   const failing = (node.tests ?? []).filter((t) => t.status === 'failed' || t.status === 'flaky');
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  const expandableIdx = failing.reduce<number[]>((acc, t, i) => {
+    if (t.errorMessage) acc.push(i);
+    return acc;
+  }, []);
+  const allExpanded = expandableIdx.length > 0 && expandableIdx.every((i) => expanded.has(i));
+
+  const toggleAll = () => setExpanded(allExpanded ? new Set() : new Set(expandableIdx));
+  const toggleOne = (i: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
 
   return (
     <div className="mt-5 pt-5 border-t border-slate-200">
@@ -213,42 +244,88 @@ function FolderDetailPanel({ node, onClose, showRunLabels }: { node: FolderTreeN
           </p>
           <p className="text-xs text-slate-500 mt-0.5">{node.failed} failing of {node.total} tests</p>
         </div>
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
-          title="Close"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {expandableIdx.length > 0 && (
+            <button
+              onClick={toggleAll}
+              className="flex items-center gap-1.5 rounded-lg bg-slate-100 border border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+            >
+              {allExpanded ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+              {allExpanded ? 'Collapse all' : 'Expand all'}
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+            title="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
       {failing.length === 0 ? (
         <p className="text-sm text-emerald-600 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4" /> All tests passing in this folder.
         </p>
       ) : (
-        <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-          {failing.map((t, i) => (
-            <div key={i} className="flex items-start gap-2 rounded-lg px-3 py-2 bg-red-50 border border-red-100">
-              <XCircle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm text-slate-800 truncate" title={t.title}>{t.title}</p>
-                {t.errorMessage && (
-                  <p
-                    className="text-xs text-red-600/80 mt-0.5 truncate"
-                    style={{ fontFamily: 'ui-monospace, monospace' }}
-                    title={t.errorMessage}
-                  >
-                    {t.errorMessage.split('\n')[0]}
-                  </p>
-                )}
-                {showRunLabels && (
-                  <p className="text-[11px] text-slate-400 mt-0.5 truncate" title={t.reportName}>
-                    in {t.reportName} · {t.reportDate}
-                  </p>
+        <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+          {failing.map((t, i) => {
+            const isOpen = expanded.has(i);
+            const canExpand = !!t.errorMessage;
+            const cat = t.errorCategory ? (CATEGORY_STYLE[t.errorCategory] ?? CATEGORY_STYLE.application) : undefined;
+            return (
+              <div key={i} className="rounded-lg bg-red-50 border border-red-100 overflow-hidden">
+                <div
+                  className={`flex items-start gap-2 px-3 py-2 ${canExpand ? 'cursor-pointer' : ''}`}
+                  onClick={() => canExpand && toggleOne(i)}
+                >
+                  <XCircle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-slate-800 truncate flex-1" title={t.title}>{t.title}</p>
+                      {cat && (
+                        <span
+                          className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full border"
+                          style={{ color: cat.color, backgroundColor: cat.bg, borderColor: cat.border }}
+                        >
+                          {cat.label}
+                        </span>
+                      )}
+                    </div>
+                    {t.errorMessage && (
+                      <p
+                        className={`text-xs text-red-600/80 mt-0.5 ${isOpen ? 'whitespace-pre-wrap break-all' : 'truncate'}`}
+                        style={{ fontFamily: 'ui-monospace, monospace' }}
+                        title={isOpen ? undefined : t.errorMessage}
+                      >
+                        {isOpen ? t.errorMessage : t.errorMessage.split('\n')[0]}
+                      </p>
+                    )}
+                    {showRunLabels && (
+                      <p className="text-[11px] text-slate-400 mt-0.5 truncate" title={t.reportName}>
+                        in {t.reportName} · {t.reportDate}
+                      </p>
+                    )}
+                  </div>
+                  {canExpand && (
+                    <span className="shrink-0 text-slate-400 mt-0.5">
+                      {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </span>
+                  )}
+                </div>
+                {isOpen && t.errorStack && (
+                  <div className="px-3 pb-3 border-t border-red-500/10 pt-2">
+                    <pre
+                      className="text-xs text-slate-600 whitespace-pre-wrap break-all leading-relaxed max-h-48 overflow-y-auto rounded-lg p-3"
+                      style={{ backgroundColor: 'rgba(0,0,0,0.25)', fontFamily: 'ui-monospace, monospace' }}
+                    >
+                      {t.errorStack}
+                    </pre>
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -344,6 +421,7 @@ function FailuresByFolderGrid({
 
       {selectedLeaf && (
         <FolderDetailPanel
+          key={selectedLeaf.fullPath || selectedLeaf.name}
           node={selectedLeaf}
           onClose={() => setSelectedLeaf(null)}
           showRunLabels={showRunLabels}

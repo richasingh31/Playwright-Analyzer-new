@@ -662,6 +662,7 @@ export function TenantComparisonPage() {
   const [filter, setFilter] = useState<FilterMode>('all');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>(COMPARE_TAB);
+  const [selectedReportIdOverride, setSelectedReportIdOverride] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -682,8 +683,52 @@ export function TenantComparisonPage() {
     [allReports],
   );
 
+  // Reports listed newest-first for the report-scope dropdown.
+  const reportOptions = useMemo(
+    () => [...reports].sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()),
+    [reports],
+  );
+
+  // Always scoped to a single report — defaults to the most recently uploaded
+  // one. Computed synchronously (not via effect) so there's no render where a
+  // stale/missing selection briefly shows the wrong report.
+  const selectedReportId =
+    selectedReportIdOverride && reportOptions.some((r) => r.id === selectedReportIdOverride)
+      ? selectedReportIdOverride
+      : (reportOptions[0]?.id ?? '');
+  const selectedReport = reportOptions.find((r) => r.id === selectedReportId);
+
+  const scopedReports = useMemo(
+    () => reports.filter((r) => r.id === selectedReportId),
+    [reports, selectedReportId],
+  );
+
+  const reportSelector = reportOptions.length > 0 && (
+    <select
+      value={selectedReportId}
+      onChange={(e) => setSelectedReportIdOverride(e.target.value)}
+      className="bg-slate-100/60 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors shrink-0 max-w-64"
+    >
+      {reportOptions.map((r) => (
+        <option key={r.id} value={r.id}>
+          {r.name} — {new Date(r.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </option>
+      ))}
+    </select>
+  );
+
+  const reportHeading = selectedReport && (
+    <p className="text-sm font-semibold text-indigo-700 mt-1 flex items-center gap-1.5">
+      {selectedReport.name}
+      <span className="text-slate-400 font-normal">·</span>
+      <span className="text-slate-500 font-normal">
+        {new Date(selectedReport.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+      </span>
+    </p>
+  );
+
   const { rows, tenants, tenantLabels, stats, statsByTenant, compareMode } = useMemo(() => {
-    if (reports.length === 0)
+    if (scopedReports.length === 0)
       return {
         rows: [],
         tenants: [],
@@ -692,15 +737,15 @@ export function TenantComparisonPage() {
         statsByTenant: new Map<string, TenantStats>(),
         compareMode: 'tenant' as const,
       };
-    const byTenant = buildTenantData(reports);
+    const byTenant = buildTenantData(scopedReports);
     // No (or only one) tenant detected — e.g. UI-test reports don't log tenant
     // IDs — so fall back to comparing the same test case across uploaded runs.
     if (byTenant.tenants.length < 2) {
-      const byRun = buildRunComparisonData(reports);
+      const byRun = buildRunComparisonData(scopedReports);
       if (byRun.tenants.length >= 2) return { ...byRun, compareMode: 'run' as const };
     }
     return { ...byTenant, compareMode: 'tenant' as const };
-  }, [reports]);
+  }, [scopedReports]);
 
   const dimensionLabel = compareMode === 'run' ? 'run' : 'tenant';
   const dimensionLabelPlural = compareMode === 'run' ? 'runs' : 'tenants';
@@ -786,18 +831,22 @@ export function TenantComparisonPage() {
     return (
       <div className="mx-auto max-w-7xl px-6 py-10 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            <GitCompare className="h-6 w-6 text-indigo-600" />
-            Tenant Comparison
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+              <GitCompare className="h-6 w-6 text-indigo-600" />
+              Tenant Comparison
+            </h1>
+            {reportHeading}
+          </div>
+          {reportSelector}
         </div>
         <div className="rounded-2xl border border-slate-300/60 bg-slate-200/60 p-10 text-center">
           <GitCompare className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">Need at least 2 tenants or 2 runs</h2>
+          <h2 className="text-lg font-semibold text-slate-900 mb-2">Need at least 2 tenants in this report</h2>
           <p className="text-slate-600 text-sm max-w-md mx-auto mb-6">
-            Upload a report whose tests log a tenant ID (e.g. <code className="text-indigo-700">[INFO] TenantId: 4</code>) or
-            whose file name carries one (e.g. <code className="text-indigo-700">TenantID:1</code>) to see cross-tenant divergence analysis —
-            or, for reports with no tenant data, upload at least 2 API test reports to compare the same test case across runs instead.
+            This report's tests need to log a tenant ID (e.g. <code className="text-indigo-700">[INFO] TenantId: 4</code>) — or
+            its file name needs to carry one (e.g. <code className="text-indigo-700">TenantID:1</code>) — for at least two
+            tenants to see cross-tenant divergence analysis. Pick a different report above, or upload one with multiple tenants.
           </p>
           <p className="text-slate-500 text-xs mb-6">
             Currently detected: {tenants.length === 1 ? (tenantLabels.get(tenants[0]) ?? tenants[0]) : 'no tenant patterns found'}
@@ -822,38 +871,42 @@ export function TenantComparisonPage() {
             <GitCompare className="h-6 w-6 text-indigo-600" />
             Tenant Comparison
           </h1>
+          {reportHeading}
           <p className="text-slate-600 text-sm mt-1">
             {compareMode === 'run'
               ? 'No tenant IDs detected — comparing the same test case across uploaded runs instead. Switch tabs to compare.'
               : 'Per-tenant pass/fail breakdown by API and test case — switch tabs to compare'}
           </p>
         </div>
-        <ExportPDFButton
-          onClick={() =>
-            exportTenantComparisonPDF({
-              dimensionLabelPlural,
-              reportCount: reports.length,
-              tenants,
-              tenantLabels: Object.fromEntries(tenantLabels),
-              stats,
-              groups: grouped.map(([apiName, scenarios]) => ({
-                apiName,
-                scenarios: scenarios.map((s) => ({
-                  title: s.title,
-                  isDivergent: s.isDivergent,
-                  statusByTenant: Object.fromEntries(
-                    tenants.map((t) => {
-                      const status = s.tenantStatuses.get(t)?.status;
-                      const label =
-                        status === 'passed' ? 'Pass' : status === 'failed' ? 'Fail' : status === 'flaky' ? 'Flaky' : status === 'skipped' ? 'Skip' : '—';
-                      return [t, label];
-                    }),
-                  ),
+        <div className="flex items-center gap-3">
+          {reportSelector}
+          <ExportPDFButton
+            onClick={() =>
+              exportTenantComparisonPDF({
+                dimensionLabelPlural,
+                reportCount: scopedReports.length,
+                tenants,
+                tenantLabels: Object.fromEntries(tenantLabels),
+                stats,
+                groups: grouped.map(([apiName, scenarios]) => ({
+                  apiName,
+                  scenarios: scenarios.map((s) => ({
+                    title: s.title,
+                    isDivergent: s.isDivergent,
+                    statusByTenant: Object.fromEntries(
+                      tenants.map((t) => {
+                        const status = s.tenantStatuses.get(t)?.status;
+                        const label =
+                          status === 'passed' ? 'Pass' : status === 'failed' ? 'Fail' : status === 'flaky' ? 'Flaky' : status === 'skipped' ? 'Skip' : '—';
+                        return [t, label];
+                      }),
+                    ),
+                  })),
                 })),
-              })),
-            })
-          }
-        />
+              })
+            }
+          />
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -863,7 +916,7 @@ export function TenantComparisonPage() {
             {compareMode === 'run' ? 'Runs' : 'Tenants'}
           </div>
           <div className="text-3xl font-bold text-slate-900">{tenants.length}</div>
-          <div className="text-xs text-slate-500 mt-1">detected across {reports.length} report{reports.length === 1 ? '' : 's'}</div>
+          <div className="text-xs text-slate-500 mt-1">detected in this report</div>
         </Card>
         <Card
           className="p-5 cursor-pointer hover:border-amber-500/40 transition-colors"
