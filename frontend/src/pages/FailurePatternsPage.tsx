@@ -231,7 +231,7 @@ function buildPatterns(reports: ParsedReport[]) {
   const totalErrors = (e: ErrorEvoEntry) =>
     e.Assertion + e.Timeout + e.Network + e.Element + e.Runtime + e.Application;
 
-  // ── Regression detection (passed in previous run → failed in latest run) ────
+  // ── Regression detection (passed on one date → failed on another date) ──────
   const dateMap = new Map<string, ParsedReport[]>();
   sorted.forEach((r) => {
     const ts = r.metadata?.startTime
@@ -250,44 +250,12 @@ function buildPatterns(reports: ParsedReport[]) {
   if (sortedDates.length >= 2) {
     regressionLatestDate = sortedDates[sortedDates.length - 1];
     regressionPrevDate = sortedDates[sortedDates.length - 2];
-    const latestReports = dateMap.get(regressionLatestDate)!;
-    const prevReports = dateMap.get(regressionPrevDate)!;
-
-    // Build prev status map — if a test passed in any prev-date run, it counts as "was passing"
-    const prevStatusMap = new Map<string, { status: 'passed' | 'failed'; runName: string }>();
-    prevReports.forEach((r) => {
-      flattenTests(r.suites).forEach((test) => {
-        const ex = prevStatusMap.get(test.fullTitle);
-        if (!ex || test.status === 'passed') {
-          prevStatusMap.set(test.fullTitle, {
-            status: test.status === 'passed' ? 'passed' : 'failed',
-            runName: r.name,
-          });
-        }
-      });
-    });
-
-    const seen = new Set<string>();
-    latestReports.forEach((r) => {
-      flattenTests(r.suites).forEach((test) => {
-        if (seen.has(test.fullTitle) || test.status !== 'failed') return;
-        const prev = prevStatusMap.get(test.fullTitle);
-        if (!prev || prev.status !== 'passed') return;
-        seen.add(test.fullTitle);
-        regressions.push({
-          testKey: test.fullTitle,
-          testLabel: trunc(test.title, 60),
-          file: test.file,
-          errorMessage: test.error?.message ?? 'Unknown error',
-          errorCategory: test.error?.category ?? 'application',
-          errorStack: test.error?.stack,
-          latestRunName: r.name,
-          prevRunName: prev.runName,
-          latestDate: regressionLatestDate,
-          prevDate: regressionPrevDate,
-        });
-      });
-    });
+    regressions = computeRegressions(
+      dateMap.get(regressionPrevDate)!,
+      dateMap.get(regressionLatestDate)!,
+      regressionPrevDate,
+      regressionLatestDate,
+    );
   }
 
   return {
@@ -301,7 +269,58 @@ function buildPatterns(reports: ParsedReport[]) {
     regressions,
     regressionLatestDate,
     regressionPrevDate,
+    dateMap,
+    sortedDates,
   };
+}
+
+// Tests that passed on `prevDateKey` but failed on `latestDateKey`. Used both for the
+// automatic "latest vs previous" default and for an arbitrary user-picked date pair.
+function computeRegressions(
+  prevReports: ParsedReport[],
+  latestReports: ParsedReport[],
+  prevDateKey: string,
+  latestDateKey: string,
+): RegressionItem[] {
+  const regressions: RegressionItem[] = [];
+
+  // Build prev status map — if a test passed in any prev-date run, it counts as "was passing"
+  const prevStatusMap = new Map<string, { status: 'passed' | 'failed'; runName: string }>();
+  prevReports.forEach((r) => {
+    flattenTests(r.suites).forEach((test) => {
+      const ex = prevStatusMap.get(test.fullTitle);
+      if (!ex || test.status === 'passed') {
+        prevStatusMap.set(test.fullTitle, {
+          status: test.status === 'passed' ? 'passed' : 'failed',
+          runName: r.name,
+        });
+      }
+    });
+  });
+
+  const seen = new Set<string>();
+  latestReports.forEach((r) => {
+    flattenTests(r.suites).forEach((test) => {
+      if (seen.has(test.fullTitle) || test.status !== 'failed') return;
+      const prev = prevStatusMap.get(test.fullTitle);
+      if (!prev || prev.status !== 'passed') return;
+      seen.add(test.fullTitle);
+      regressions.push({
+        testKey: test.fullTitle,
+        testLabel: trunc(test.title, 60),
+        file: test.file,
+        errorMessage: test.error?.message ?? 'Unknown error',
+        errorCategory: test.error?.category ?? 'application',
+        errorStack: test.error?.stack,
+        latestRunName: r.name,
+        prevRunName: prev.runName,
+        latestDate: latestDateKey,
+        prevDate: prevDateKey,
+      });
+    });
+  });
+
+  return regressions;
 }
 
 // ── Suite Tooltip ─────────────────────────────────────────────────────────────
@@ -456,14 +475,67 @@ function RegressionCard({
   );
 }
 
+function DayCompareSelect({
+  dates,
+  dayA,
+  dayB,
+  onChangeDayA,
+  onChangeDayB,
+}: {
+  dates: string[];
+  dayA: string;
+  dayB: string;
+  onChangeDayA: (d: string) => void;
+  onChangeDayB: (d: string) => void;
+}) {
+  const selectClass =
+    'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all duration-150 hover:shadow-md focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/15';
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+          Day 1 — passed
+        </label>
+        <select value={dayA} onChange={(e) => onChangeDayA(e.target.value)} className={selectClass}>
+          {dates.map((d) => (
+            <option key={d} value={d} disabled={d === dayB}>
+              {d}
+            </option>
+          ))}
+        </select>
+      </div>
+      <span className="mt-4 text-sm font-bold text-slate-400">→</span>
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-semibold uppercase tracking-wide text-red-600">
+          Day 2 — failed
+        </label>
+        <select value={dayB} onChange={(e) => onChangeDayB(e.target.value)} className={selectClass}>
+          {dates.map((d) => (
+            <option key={d} value={d} disabled={d === dayA}>
+              {d}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 function RegressionSection({
   regressions,
   prevDate,
   latestDate,
+  sortedDates,
+  onChangeDayA,
+  onChangeDayB,
 }: {
   regressions: RegressionItem[];
   prevDate: string;
   latestDate: string;
+  sortedDates: string[];
+  onChangeDayA: (d: string) => void;
+  onChangeDayB: (d: string) => void;
 }) {
   const hasRegressions = regressions.length > 0;
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
@@ -514,6 +586,18 @@ function RegressionSection({
           ) : undefined
         }
       />
+
+      {sortedDates.length >= 2 && (
+        <div className="mb-4 pb-4 border-b border-slate-200">
+          <DayCompareSelect
+            dates={sortedDates}
+            dayA={prevDate}
+            dayB={latestDate}
+            onChangeDayA={onChangeDayA}
+            onChangeDayB={onChangeDayB}
+          />
+        </div>
+      )}
 
       {!prevDate ? (
         <p className="text-center text-sm text-slate-500 py-6">
@@ -625,6 +709,25 @@ export function FailurePatternsPage() {
     [reports],
   );
 
+  // Manually picked "Day 1 (passed) → Day 2 (failed)" comparison for the regression
+  // detector — defaults to the latest two report dates, same as the automatic behavior.
+  const [compareDayA, setCompareDayA] = useState('');
+  const [compareDayB, setCompareDayB] = useState('');
+
+  useEffect(() => {
+    setCompareDayA(data?.regressionPrevDate ?? '');
+    setCompareDayB(data?.regressionLatestDate ?? '');
+  }, [data]);
+
+  const selectedRegressions = useMemo(() => {
+    if (!data || !compareDayA || !compareDayB || compareDayA === compareDayB) return null;
+    if (compareDayA === data.regressionPrevDate && compareDayB === data.regressionLatestDate) return null;
+    const prevReports = data.dateMap.get(compareDayA);
+    const latestReports = data.dateMap.get(compareDayB);
+    if (!prevReports || !latestReports) return null;
+    return computeRegressions(prevReports, latestReports, compareDayA, compareDayB);
+  }, [data, compareDayA, compareDayB]);
+
   if (loading) return <FullPageSpinner label="Analyzing failure patterns…" />;
   if (error) return <ErrorState message={error} />;
 
@@ -684,10 +787,11 @@ export function FailurePatternsPage() {
     consistentlyFailing,
     flakyCount,
     hasErrors,
-    regressions,
-    regressionLatestDate,
-    regressionPrevDate,
+    sortedDates,
   } = data;
+  const regressions = selectedRegressions ?? data.regressions;
+  const regressionPrevDate = compareDayA || data.regressionPrevDate;
+  const regressionLatestDate = compareDayB || data.regressionLatestDate;
 
   const suiteChartH = Math.min(360, Math.max(160, suiteHealth.length * 38 + 40));
 
@@ -752,6 +856,9 @@ export function FailurePatternsPage() {
         regressions={regressions}
         prevDate={regressionPrevDate}
         latestDate={regressionLatestDate}
+        sortedDates={sortedDates}
+        onChangeDayA={setCompareDayA}
+        onChangeDayB={setCompareDayB}
       />
 
       {/* Suite Health + Error Evolution */}
