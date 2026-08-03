@@ -410,9 +410,131 @@ export async function exportAnalysisPDF(report: ParsedReport): Promise<void> {
   pdf.save(`${safeName}_report.pdf`);
 }
 
+// ── Trend-card mini chart helpers ─────────────────────────────────────────────
+
+const DURATION_BANDS: Array<{ maxMs: number; rgb: RGB }> = [
+  { maxMs: 22_000, rgb: C.passed },
+  { maxMs: 30_000, rgb: C.flaky },
+  { maxMs: Infinity, rgb: C.orange },
+];
+function durationBandRGB(ms: number): RGB {
+  return (DURATION_BANDS.find((b) => ms <= b.maxMs) ?? DURATION_BANDS[DURATION_BANDS.length - 1]).rgb;
+}
+
+function chartDate(r: ReportSummary): string {
+  return formatDate(r.startTime ? new Date(r.startTime).toISOString() : r.uploadedAt).split(',')[0];
+}
+
+function drawNoData(pdf: JsPDFType, x: number, y: number, w: number, h: number, msg: string) {
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(7.5);
+  st(pdf, C.muted);
+  pdf.text(msg, x + w / 2, y + h / 2, { align: 'center' });
+}
+
+function drawStackedBars(pdf: JsPDFType, x: number, y: number, w: number, h: number, data: Array<{ date: string; pass: number; fail: number }>) {
+  if (data.length === 0) return drawNoData(pdf, x, y, w, h, 'No data');
+  const gap = 3;
+  const barW = Math.min(14, (w - gap * (data.length - 1)) / data.length);
+  const totalW = barW * data.length + gap * (data.length - 1);
+  const startX = x + (w - totalW) / 2;
+  const baseline = y + h;
+  data.forEach((d, i) => {
+    const bx = startX + i * (barW + gap);
+    const passH = (d.pass / 100) * h;
+    const failH = (d.fail / 100) * h;
+    sf(pdf, C.passed);
+    pdf.rect(bx, baseline - passH, barW, passH, 'F');
+    sf(pdf, C.failed);
+    pdf.rect(bx, baseline - passH - failH, barW, failH, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(5.5);
+    st(pdf, C.text);
+    pdf.text(`${d.pass}%`, bx + barW / 2, baseline - passH - failH - 1.5, { align: 'center' });
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(5);
+    st(pdf, C.muted);
+    pdf.text(d.date, bx + barW / 2, baseline + 5, { align: 'center' });
+  });
+}
+
+function drawBandedBars(pdf: JsPDFType, x: number, y: number, w: number, h: number, data: Array<{ date: string; ms: number }>) {
+  if (data.length === 0) return drawNoData(pdf, x, y, w, h, 'No data');
+  const max = Math.max(...data.map((d) => d.ms), 1);
+  const gap = 3;
+  const barW = Math.min(14, (w - gap * (data.length - 1)) / data.length);
+  const totalW = barW * data.length + gap * (data.length - 1);
+  const startX = x + (w - totalW) / 2;
+  const baseline = y + h;
+  data.forEach((d, i) => {
+    const bx = startX + i * (barW + gap);
+    const bh = max > 0 ? (d.ms / max) * h : 0;
+    sf(pdf, durationBandRGB(d.ms));
+    pdf.rect(bx, baseline - bh, barW, bh, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(5.5);
+    st(pdf, C.text);
+    pdf.text(formatDuration(d.ms), bx + barW / 2, baseline - bh - 1.5, { align: 'center' });
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(5);
+    st(pdf, C.muted);
+    pdf.text(d.date, bx + barW / 2, baseline + 5, { align: 'center' });
+  });
+}
+
+function drawLineMini(pdf: JsPDFType, x: number, y: number, w: number, h: number, data: Array<{ date: string; value: number }>, color: RGB) {
+  if (data.length === 0) return drawNoData(pdf, x, y, w, h, 'No data');
+  const n = data.length;
+  const stepX = n > 1 ? w / (n - 1) : 0;
+  const points = data.map((d, i) => ({
+    px: n > 1 ? x + i * stepX : x + w / 2,
+    py: y + h - (Math.min(d.value, 100) / 100) * h,
+  }));
+  sd(pdf, color);
+  pdf.setLineWidth(0.6);
+  for (let i = 0; i < points.length - 1; i++) pdf.line(points[i].px, points[i].py, points[i + 1].px, points[i + 1].py);
+  points.forEach((p, i) => {
+    sf(pdf, color);
+    pdf.circle(p.px, p.py, 1.1, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(5.5);
+    st(pdf, color);
+    pdf.text(`${data[i].value}%`, p.px, p.py - 2.5, { align: 'center' });
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(5);
+    st(pdf, C.muted);
+    pdf.text(data[i].date, p.px, y + h + 5, { align: 'center' });
+  });
+}
+
+function drawTrendCard(
+  pdf: JsPDFType,
+  x: number, y: number, w: number, h: number,
+  title: string, subtitle: string,
+  draw: (pdf: JsPDFType, cx: number, cy: number, cw: number, ch: number) => void,
+) {
+  sf(pdf, C.light);
+  pdf.roundedRect(x, y, w, h, 2, 2, 'F');
+  sd(pdf, C.border);
+  pdf.setLineWidth(0.3);
+  pdf.roundedRect(x, y, w, h, 2, 2, 'S');
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8.5);
+  st(pdf, C.text);
+  pdf.text(title, x + 4, y + 8);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(6.5);
+  st(pdf, C.muted);
+  pdf.text(subtitle, x + 4, y + 13.5);
+  sd(pdf, C.border);
+  pdf.setLineWidth(0.25);
+  pdf.line(x + 4, y + 16, x + w - 4, y + 16);
+  draw(pdf, x + 6, y + 22, w - 12, h - 22 - 12);
+}
+
 // ── Export Trends PDF ─────────────────────────────────────────────────────────
 
-export async function exportTrendsPDF(reports: ReportSummary[]): Promise<void> {
+export async function exportTrendsPDF(reports: ReportSummary[], kindLabel: 'API' | 'UI' = 'API'): Promise<void> {
   const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' }) as unknown as JsPDFType;
 
@@ -420,11 +542,15 @@ export async function exportTrendsPDF(reports: ReportSummary[]): Promise<void> {
   const M      = 15;
   const CONT_W = PAGE_W - 2 * M;
   const MAX_Y  = 278;
+  const MAX_RUNS = 8;
 
   const sorted = [...reports].sort((a, b) =>
     (a.startTime ?? new Date(a.uploadedAt).getTime()) -
     (b.startTime ?? new Date(b.uploadedAt).getTime()),
   );
+  // The 4 trend cards and the Report Comparison table only ever chart the most
+  // recent runs — kept identical so the table always matches what the charts show.
+  const recent = sorted.slice(-MAX_RUNS);
 
   const avgPassRate   = reports.length > 0 ? Math.round(reports.reduce((s, r) => s + r.stats.passRate, 0) / reports.length) : 0;
   const totalTests    = reports.reduce((s, r) => s + r.stats.total, 0);
@@ -432,6 +558,12 @@ export async function exportTrendsPDF(reports: ReportSummary[]): Promise<void> {
   const trendDelta    = sorted.length >= 2 ? sorted[sorted.length - 1].stats.passRate - sorted[0].stats.passRate : 0;
   const trendStr      = trendDelta > 1 ? `+${trendDelta.toFixed(0)}%` : trendDelta < -1 ? `${trendDelta.toFixed(0)}%` : 'Stable';
   const trendRGB: RGB = trendDelta > 1 ? C.passed : trendDelta < -1 ? C.failed : C.flaky;
+
+  const chartDateRange = recent.length === 0
+    ? ''
+    : recent.length === 1
+      ? `${chartDate(recent[0])} (1 report)`
+      : `${chartDate(recent[0])} – ${chartDate(recent[recent.length - 1])} (last ${recent.length} of ${reports.length} reports)`;
 
   // ── Cover ─────────────────────────────────────────────────────────────────────
   sf(pdf, C.header);
@@ -441,11 +573,15 @@ export async function exportTrendsPDF(reports: ReportSummary[]): Promise<void> {
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(16);
   st(pdf, C.white);
-  pdf.text('Playwright Test Trends Report', 12, 19);
+  pdf.text(`${kindLabel} Automation Dashboard - Trends`, 12, 19);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   st(pdf, C.mutedBg);
   pdf.text(`${reports.length} reports analyzed  ·  Generated ${formatDate(new Date().toISOString())}`, 12, 29);
+  if (chartDateRange) {
+    pdf.setFontSize(8);
+    pdf.text(`Chart data: ${chartDateRange}`, 12, 37);
+  }
 
   sf(pdf, trendRGB);
   pdf.roundedRect(PAGE_W - 42, 10, 28, 30, 3, 3, 'F');
@@ -499,33 +635,59 @@ export async function exportTrendsPDF(reports: ReportSummary[]): Promise<void> {
   });
   y += 24;
 
-  // ── Mini bar chart ────────────────────────────────────────────────────────────
-  y = sectionHeading(pdf, 'Pass Rate History', M, y, PAGE_W);
+  // ── Page 2: Trend charts (mirrors the 4 dashboard cards) ─────────────────────
+  pdf.addPage();
+  y = addSubHeader(
+    pdf,
+    'Trend Charts',
+    `${kindLabel} Automation · last ${recent.length} of ${reports.length} report${reports.length !== 1 ? 's' : ''}`,
+    PAGE_W,
+  );
 
-  const BAR_H = 32;
-  const barW  = Math.min(18, (CONT_W - 10) / Math.max(sorted.length, 1));
-  sorted.forEach((r, i) => {
-    const bx  = M + i * (barW + 2);
-    const bh  = (r.stats.passRate / 100) * BAR_H;
-    const by  = y + BAR_H - bh;
-    const pc  = r.stats.passRate >= 90 ? C.passed : r.stats.passRate >= 70 ? C.flaky : C.failed;
-    sf(pdf, pc);
-    pdf.rect(bx, by, barW, bh, 'F');
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(5.5);
-    st(pdf, pc);
-    pdf.text(`${r.stats.passRate}%`, bx + barW / 2, by - 1.5, { align: 'center' });
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(5);
-    st(pdf, C.muted);
-    const dl = formatDate(r.startTime ? new Date(r.startTime).toISOString() : r.uploadedAt).split(',')[0];
-    pdf.text(dl, bx + barW / 2, y + BAR_H + 5, { align: 'center' });
-  });
-  y += BAR_H + 14;
+  const resultsData   = recent.map((r) => ({ date: chartDate(r), pass: r.stats.passRate, fail: 100 - r.stats.passRate }));
+  const durationData  = recent.map((r) => ({ date: chartDate(r), ms: r.stats.duration }));
+  const passTrendData = recent.map((r) => ({ date: chartDate(r), value: r.stats.passRate }));
+  const failTrendData = recent.map((r) => ({
+    date: chartDate(r),
+    value: r.stats.total > 0 ? Math.round((r.stats.failed / r.stats.total) * 100) : 0,
+  }));
 
-  // ── Report comparison table ───────────────────────────────────────────────────
-  y = sectionHeading(pdf, 'Report Comparison', M, y, PAGE_W);
-  const reportRows = [...sorted].reverse().map((r) => [
+  const CARD_GAP = 6;
+  const cardW    = (CONT_W - CARD_GAP) / 2;
+  const cardH    = 88;
+  const row1Y    = y + 8;
+  const row2Y    = row1Y + cardH + 8;
+
+  drawTrendCard(
+    pdf, M, row1Y, cardW, cardH,
+    'Test Results by Date', `Pass/fail distribution — last ${recent.length} runs`,
+    (p, cx, cy, cw, ch) => drawStackedBars(p, cx, cy, cw, ch, resultsData),
+  );
+  drawTrendCard(
+    pdf, M + cardW + CARD_GAP, row1Y, cardW, cardH,
+    'Suite Duration Trend', `Total run time — last ${recent.length} runs`,
+    (p, cx, cy, cw, ch) => drawBandedBars(p, cx, cy, cw, ch, durationData),
+  );
+  drawTrendCard(
+    pdf, M, row2Y, cardW, cardH,
+    `${kindLabel} Automation — Pass Trend`, `Pass rate (%) — last ${recent.length} runs`,
+    (p, cx, cy, cw, ch) => drawLineMini(p, cx, cy, cw, ch, passTrendData, C.passed),
+  );
+  drawTrendCard(
+    pdf, M + cardW + CARD_GAP, row2Y, cardW, cardH,
+    `${kindLabel} Automation — Fail Trend`, `Fail rate (%) — last ${recent.length} runs`,
+    (p, cx, cy, cw, ch) => drawLineMini(p, cx, cy, cw, ch, failTrendData, C.failed),
+  );
+
+  // ── Page 3: Report comparison table — same runs as the charts above ──────────
+  pdf.addPage();
+  y = addSubHeader(
+    pdf,
+    'Report Comparison',
+    `${kindLabel} Automation · the ${recent.length} report${recent.length !== 1 ? 's' : ''} charted above`,
+    PAGE_W,
+  );
+  const reportRows = [...recent].reverse().map((r) => [
     r.name.length > 34 ? r.name.substring(0, 34) + '…' : r.name,
     formatDate(r.startTime ? new Date(r.startTime).toISOString() : r.uploadedAt),
     `${r.stats.passRate}%`,
@@ -548,7 +710,7 @@ export async function exportTrendsPDF(reports: ReportSummary[]): Promise<void> {
   const pages = pdf.getNumberOfPages();
   for (let i = 1; i <= pages; i++) { pdf.setPage(i); addFooter(pdf, i, pages, PAGE_W); }
 
-  pdf.save('playwright_trends_report.pdf');
+  pdf.save(`${kindLabel.toLowerCase()}_automation_trends_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
 // ── Export Failure Analysis PDF (whole Analysis/Failures page) ───────────────

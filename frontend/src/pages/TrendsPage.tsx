@@ -515,7 +515,7 @@ export function TrendsPage() {
           <h1 className="text-2xl font-extrabold uppercase tracking-wide text-slate-900">Trends</h1>
         </div>
         {filteredReports.length > 0 && (
-          <ExportPDFButton onClick={() => exportTrendsPDF(filteredReports)} />
+          <ExportPDFButton onClick={() => exportTrendsPDF(filteredReports, reportKind === 'ui' ? 'UI' : 'API')} />
         )}
       </div>
 
