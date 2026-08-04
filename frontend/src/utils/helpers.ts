@@ -85,13 +85,50 @@ export function flattenTests(
 }
 
 /**
- * Classifies a report as 'ui' or 'api' by its dominant top-level test folder —
- * reports whose tests mostly live under an "EstimationAI" folder are UI-test
- * runs, everything else (CPQ, Estimations, ...) is an API-test run.
+ * Reads a suite's `hostname` (the JUnit run identifier) as a UI/API signal.
+ * BrowserStack's browser grid ("bs-chrome") and Playwright's own local
+ * browser engines ("chromium", "firefox", "webkit", ...) drive real UI runs.
+ * BrowserStack's OS/browser device-matrix identifier used for API runs looks
+ * like "16-latest:Windows 11-browserstack" — the colon is what sets it apart.
+ */
+function classifyHostname(hostname: string | undefined): 'ui' | 'api' | undefined {
+  const h = hostname?.trim();
+  if (!h) return undefined;
+  if (h.includes(':') && /browserstack$/i.test(h)) return 'api';
+  if (/^bs-/i.test(h) || /^(chromium|firefox|webkit|edge|safari)/i.test(h)) return 'ui';
+  return undefined;
+}
+
+/** Suite hostname with the most tests behind it, for reports that mix projects. */
+function dominantHostname(suites: import('../types').TestSuite[]): string | undefined {
+  const counts = new Map<string, number>();
+  for (const s of suites) {
+    if (!s.hostname) continue;
+    counts.set(s.hostname, (counts.get(s.hostname) ?? 0) + (s.tests.length || 1));
+  }
+  let dominant: string | undefined;
+  let max = -1;
+  counts.forEach((count, hostname) => {
+    if (count > max) {
+      max = count;
+      dominant = hostname;
+    }
+  });
+  return dominant;
+}
+
+/**
+ * Classifies a report as 'ui' or 'api'. Primarily by the dominant suite
+ * `hostname` (see classifyHostname above). Reports uploaded before hostname
+ * tracking was added fall back to the dominant top-level test folder —
+ * "EstimationAI" is a UI-test run, everything else is an API-test run.
  */
 export function classifyReportKind(
   report: import('../types').ParsedReport,
 ): 'ui' | 'api' {
+  const hostKind = classifyHostname(dominantHostname(report.suites));
+  if (hostKind) return hostKind;
+
   const tests = flattenTests(report.suites);
   if (tests.length === 0) return 'api';
 

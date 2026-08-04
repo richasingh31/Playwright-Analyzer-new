@@ -65,9 +65,25 @@ function extractTenantId(systemOut: string | string[] | undefined): string | und
 // which environment (QA/SIT/PPE) the run actually executed against.
 const ENVIRONMENT_URL_PATTERN = /(?:https?|wss?):\/\/(qa|sit|ppe)\.selectionnavigator\.com/i;
 
+// UI suites instead log into a Salesforce Experience Cloud sandbox, e.g.
+// "https://jcibe--uat.sandbox.my.site.com/..." — this org calls its PPE tier
+// "uat" in Salesforce, so that sandbox name maps to the PPE environment.
+const SANDBOX_URL_PATTERN = /jcibe--(qa|sit|uat|ppe)\.sandbox\.my\.site\.com/i;
+const SANDBOX_TIER_TO_ENVIRONMENT: Record<string, Environment> = {
+  qa: 'QA',
+  sit: 'SIT',
+  uat: 'PPE',
+  ppe: 'PPE',
+};
+
 function extractEnvironment(xml: string): Environment | undefined {
-  const match = xml.match(ENVIRONMENT_URL_PATTERN);
-  return match ? (match[1].toUpperCase() as Environment) : undefined;
+  const primary = xml.match(ENVIRONMENT_URL_PATTERN);
+  if (primary) return primary[1].toUpperCase() as Environment;
+
+  const sandbox = xml.match(SANDBOX_URL_PATTERN);
+  if (sandbox) return SANDBOX_TIER_TO_ENVIRONMENT[sandbox[1].toLowerCase()];
+
+  return undefined;
 }
 
 // ── XML parsing ────────────────────────────────────────────────────────────────
@@ -157,6 +173,7 @@ function mapTestSuite(suite: JUnitTestSuite): TestSuite {
     id: uuidv4(),
     title: suiteName,
     file,
+    hostname: suite['@_hostname'],
     tests,
     suites: [],
     stats: {

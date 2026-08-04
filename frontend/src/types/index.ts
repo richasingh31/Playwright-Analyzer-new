@@ -40,6 +40,8 @@ export interface TestSuite {
   id: string;
   title: string;
   file: string;
+  /** JUnit `hostname` attribute — the browser/run identifier (e.g. "bs-chrome", "16-latest:Windows 11-browserstack") used to tell UI runs from API runs. */
+  hostname?: string;
   tests: TestResult[];
   suites: TestSuite[];
   stats: SuiteStats;
