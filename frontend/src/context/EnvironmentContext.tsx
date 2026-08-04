@@ -13,19 +13,35 @@ function readStored(): Environment {
 interface EnvironmentContextValue {
   environment: Environment;
   setEnvironment: (env: Environment) => void;
+  isSwitching: boolean;
 }
 
 const EnvironmentContext = createContext<EnvironmentContextValue | undefined>(undefined);
 
+// How long the "switching environment" overlay stays visible. The underlying data is
+// already loaded client-side and re-filtering is instant, so this is a deliberate,
+// minimum-visible-duration UX cue rather than a reflection of real network latency.
+const SWITCH_OVERLAY_MS = 500;
+
 export function EnvironmentProvider({ children }: { children: ReactNode }) {
-  const [environment, setEnvironment] = useState<Environment>(readStored);
+  const [environment, setEnvironmentState] = useState<Environment>(readStored);
+  const [isSwitching, setIsSwitching] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, environment);
   }, [environment]);
 
+  const setEnvironment = (env: Environment) => {
+    setEnvironmentState((prev) => {
+      if (prev === env) return prev;
+      setIsSwitching(true);
+      window.setTimeout(() => setIsSwitching(false), SWITCH_OVERLAY_MS);
+      return env;
+    });
+  };
+
   return (
-    <EnvironmentContext.Provider value={{ environment, setEnvironment }}>
+    <EnvironmentContext.Provider value={{ environment, setEnvironment, isSwitching }}>
       {children}
     </EnvironmentContext.Provider>
   );
