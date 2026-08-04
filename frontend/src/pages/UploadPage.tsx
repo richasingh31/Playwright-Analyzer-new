@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { reportsApi, ApiError } from '../api/client';
-import type { ReportSummary } from '../types';
+import type { ReportSummary, Environment } from '../types';
 import { Button } from '../components/ui/Button';
 import { timeAgo, formatDate, classifyReportKind } from '../utils/helpers';
 import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
@@ -54,7 +54,7 @@ function MiniBars({ seed }: { seed: string }) {
 
 export function UploadPage() {
   const navigate = useNavigate();
-  const { environment } = useEnvironment();
+  const { environment, setEnvironment } = useEnvironment();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -62,7 +62,6 @@ export function UploadPage() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
-  const [uploadEnv, setUploadEnv] = useState(environment);
 
   const [recent, setRecent] = useState<ReportSummary[] | null>(null);
   const [recentKinds, setRecentKinds] = useState<Map<string, ReportKind>>(new Map());
@@ -117,7 +116,7 @@ export function UploadPage() {
     setError('');
     setDuplicateId(null);
     try {
-      await reportsApi.upload(file, setProgress, uploadEnv);
+      await reportsApi.upload(file, setProgress, environment);
       navigate('/trends');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
@@ -276,26 +275,8 @@ export function UploadPage() {
             </div>
           )}
 
-          {/* Environment + CTA */}
-          <div className="mt-5 flex flex-col items-center gap-3">
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
-                <Globe className="h-4 w-4 text-emerald-600" />
-                Environment
-              </label>
-              <select
-                value={uploadEnv}
-                onChange={(e) => setUploadEnv(e.target.value as typeof uploadEnv)}
-                disabled={uploading}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm focus:outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/15 disabled:opacity-50"
-              >
-                {ENVIRONMENTS.map((env) => (
-                  <option key={env} value={env}>
-                    {env}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* CTA */}
+          <div className="mt-5 flex justify-center">
             <Button
               size="lg"
               onClick={handleUpload}
@@ -351,12 +332,30 @@ export function UploadPage() {
 
         {/* Right: recent reports rail */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-5 py-4 flex-wrap">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-slate-400" />
               <h3 className="text-sm font-semibold text-slate-900">Recent Reports</h3>
             </div>
-            <ReportKindSelect value={reportKind} onChange={setReportKind} size="sm" />
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+                <Globe className="h-3 w-3" />
+                Env
+              </span>
+              <select
+                value={environment}
+                onChange={(e) => setEnvironment(e.target.value as Environment)}
+                className="rounded-2xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-all duration-150 hover:shadow-md focus:outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/15"
+                title="Show reports uploaded from this environment"
+              >
+                {ENVIRONMENTS.map((env) => (
+                  <option key={env} value={env}>
+                    {env}
+                  </option>
+                ))}
+              </select>
+              <ReportKindSelect value={reportKind} onChange={setReportKind} size="sm" />
+            </div>
           </div>
 
           <div className="max-h-[420px] overflow-y-auto p-3 space-y-3">

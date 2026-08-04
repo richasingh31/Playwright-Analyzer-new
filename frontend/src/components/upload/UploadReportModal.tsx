@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
-import { Upload, FileText, X, Globe } from 'lucide-react';
+import { Upload, FileText, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { reportsApi } from '../../api/client';
 import type { UploadResponse } from '../../types';
-import { useEnvironment, ENVIRONMENTS } from '../../context/EnvironmentContext';
+import { useEnvironment } from '../../context/EnvironmentContext';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 
@@ -13,14 +13,13 @@ interface UploadReportModalProps {
 }
 
 export function UploadReportModal({ onClose, onUploaded }: UploadReportModalProps) {
-  const { environment: globalEnvironment } = useEnvironment();
+  const { environment } = useEnvironment();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
-  const [environment, setEnvironment] = useState(globalEnvironment);
 
   const accept = (f: File) => {
     setError('');
@@ -57,25 +56,6 @@ export function UploadReportModal({ onClose, onUploaded }: UploadReportModalProp
 
   return (
     <Modal title="Upload New Report" onClose={onClose}>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-          <Globe className="h-4 w-4 text-emerald-600" />
-          Environment
-        </label>
-        <select
-          value={environment}
-          onChange={(e) => setEnvironment(e.target.value as typeof environment)}
-          disabled={uploading}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm focus:outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/15 disabled:opacity-50"
-        >
-          {ENVIRONMENTS.map((env) => (
-            <option key={env} value={env}>
-              {env}
-            </option>
-          ))}
-        </select>
-      </div>
-
       <div
         onDrop={onDrop}
         onDragOver={onDragOver}
