@@ -58,6 +58,18 @@ function extractTenantId(systemOut: string | string[] | undefined): string | und
   return text.match(TENANT_ID_PATTERN)?.[1];
 }
 
+// ── Environment extraction ──────────────────────────────────────────────────────
+// Test logs hit environment-specific hosts, e.g.
+// "https://qa.selectionnavigator.com/app-shs/bootstrap/..." or
+// "wss://sit.selectionnavigator.com/srs/client/..." — the subdomain tells us
+// which environment (QA/SIT/PPE) the run actually executed against.
+const ENVIRONMENT_URL_PATTERN = /(?:https?|wss?):\/\/(qa|sit|ppe)\.selectionnavigator\.com/i;
+
+function extractEnvironment(xml: string): Environment | undefined {
+  const match = xml.match(ENVIRONMENT_URL_PATTERN);
+  return match ? (match[1].toUpperCase() as Environment) : undefined;
+}
+
 // ── XML parsing ────────────────────────────────────────────────────────────────
 
 const ARRAY_ELEMENTS = new Set(['testsuites.testsuite', 'testsuite.testcase', 'testcase.failure', 'testcase.error']);
@@ -195,7 +207,7 @@ export async function parsePlaywrightReport(
   fileBuffer: Buffer,
   fileName: string,
   contentHash: string,
-  environment: Environment,
+  fallbackEnvironment: Environment,
 ): Promise<ParsedReport> {
   const xml = fileBuffer.toString('utf-8');
 
@@ -238,6 +250,10 @@ export async function parsePlaywrightReport(
   const tenantIds = Array.from(
     new Set(allTests.map((t) => t.tenantId).filter((t): t is string => !!t)),
   ).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+  // The environment logged in the run's own output (via the host it hit) is
+  // authoritative when present — it can't be mis-selected by whoever uploads.
+  const environment = extractEnvironment(xml) ?? fallbackEnvironment;
 
   return {
     id: uuidv4(),
