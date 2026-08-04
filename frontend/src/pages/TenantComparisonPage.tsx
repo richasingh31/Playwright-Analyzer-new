@@ -713,7 +713,7 @@ export function TenantComparisonPage() {
     >
       {reportOptions.map((r) => (
         <option key={r.id} value={r.id}>
-          {r.name} — {new Date(r.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          {r.name} — {new Date(r.metadata?.startTime ?? r.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
         </option>
       ))}
     </select>
@@ -724,7 +724,7 @@ export function TenantComparisonPage() {
       {selectedReport.name}
       <span className="text-slate-400 font-normal">·</span>
       <span className="text-slate-500 font-normal">
-        {new Date(selectedReport.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        {new Date(selectedReport.metadata?.startTime ?? selectedReport.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
       </span>
     </p>
   );
