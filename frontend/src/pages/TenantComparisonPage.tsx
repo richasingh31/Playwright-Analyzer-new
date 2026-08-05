@@ -802,7 +802,7 @@ export function TenantComparisonPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Users className="h-12 w-12 text-slate-400" />
         <p className="text-slate-600 text-lg">No reports found</p>
-        <Button onClick={() => navigate('/')}>
+        <Button onClick={() => navigate('/upload')}>
           <Upload className="h-4 w-4 mr-2" /> Upload Reports
         </Button>
       </div>
@@ -821,7 +821,7 @@ export function TenantComparisonPage() {
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
           <Users className="h-12 w-12 text-slate-400" />
           <p className="text-slate-600 text-lg">No API test reports found</p>
-          <Button onClick={() => navigate('/')}>
+          <Button onClick={() => navigate('/upload')}>
             <Upload className="h-4 w-4 mr-2" /> Upload Reports
           </Button>
         </div>
@@ -853,7 +853,7 @@ export function TenantComparisonPage() {
           <p className="text-slate-500 text-xs mb-6">
             Currently detected: {tenants.length === 1 ? (tenantLabels.get(tenants[0]) ?? tenants[0]) : 'no tenant patterns found'}
           </p>
-          <Button onClick={() => navigate('/')}>
+          <Button onClick={() => navigate('/upload')}>
             <Upload className="h-4 w-4 mr-2" /> Upload More Reports
           </Button>
         </div>

@@ -68,7 +68,7 @@ function AdminMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { pathname } = useLocation();
-  const active = pathname === '/';
+  const active = pathname === '/upload';
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -98,7 +98,7 @@ function AdminMenu() {
       {open && (
         <div className="absolute right-0 mt-1 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg animate-fade-in">
           <Link
-            to="/"
+            to="/upload"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3.5 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           >

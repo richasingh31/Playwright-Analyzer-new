@@ -15,7 +15,8 @@ export default function App() {
       <EnvironmentProvider>
         <Layout>
           <Routes>
-            <Route path="/" element={<UploadPage />} />
+            <Route path="/" element={<TrendsPage />} />
+            <Route path="/upload" element={<UploadPage />} />
             <Route path="/analysis/:id" element={<AnalysisPage />} />
             <Route path="/analysis/:id/category/:status" element={<DrillDownPage />} />
             <Route path="/trends" element={<TrendsPage />} />
