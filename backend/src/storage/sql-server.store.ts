@@ -1,3 +1,10 @@
+// Not currently used — see the note atop db.ts. Kept commented out alongside
+// db.ts and migrations.ts in case SQL Server storage is wanted again.
+// Note: IReportRepository.save() has since changed shape — it now takes
+// (buffer, fileName, environment) instead of a pre-parsed ParsedReport, to
+// support reading raw XML files straight from backend/data/. This class's
+// save() would need updating to match before it compiles again.
+/*
 import sql from 'mssql/msnodesqlv8';
 import type { ParsedReport, ReportSummary, Environment } from '../types/report.types';
 import type { IReportRepository } from './store';
@@ -123,3 +130,4 @@ export class SqlServerReportRepository implements IReportRepository {
     return (result.rowsAffected[0] ?? 0) > 0;
   }
 }
+*/

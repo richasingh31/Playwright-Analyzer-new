@@ -1,15 +1,19 @@
 import 'dotenv/config';
-import util from 'node:util';
+import fs from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import reportRoutes from './routes/reports.routes';
-import { runMigrations } from './storage/migrations';
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
+
+// backend/src/index.ts -> backend/../frontend/dist, whether run from src (tsx)
+// or from dist (compiled) — both sit one level under backend/.
+const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
 
 app.use(helmet());
 app.use(
@@ -34,6 +38,19 @@ app.get('/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() }),
 );
 
+// Serve the built frontend so the UI and API share one port. Build it first
+// with `npm run build` in frontend/ — this only serves what's already there.
+app.use(express.static(FRONTEND_DIST));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    res.status(404).json({ error: 'Not found.' });
+    return;
+  }
+  res.sendFile(path.join(FRONTEND_DIST, 'index.html'), (err) => {
+    if (err) next(err);
+  });
+});
+
 // Global error handler
 app.use(
   (
@@ -49,30 +66,12 @@ app.use(
   },
 );
 
-async function start() {
-  try {
-    await runMigrations();
-  } catch (err) {
-    console.error(
-      '\n❌  Could not connect to SQL Server / run migrations.\n' +
-        `   Check DB_SERVER/DB_PORT/DB_NAME in backend/.env, and that:\n` +
-        '   - SQL Server\'s TCP/IP protocol is enabled (SQL Server Configuration Manager →\n' +
-        '     SQL Server Network Configuration → Protocols → TCP/IP → Enabled) with a\n' +
-        '     known static port under TCP/IP Properties → IP Addresses → IPAll → TCP Port\n' +
-        '   - the SQL Server service has been restarted after that change\n' +
-        '   - Windows Firewall allows inbound connections on that port\n' +
-        '   - this is running under a Windows account that has access to the target\n' +
-        '     database (Windows Authentication / Trusted Connection — no DB_USER/DB_PASSWORD)\n' +
-        '   - the msnodesqlv8 native module installed correctly (npm install must be run\n' +
-        '     on this same Windows machine — it will not work with a copied node_modules)\n',
-    );
-    console.error(util.inspect(err, { depth: null, showHidden: true }));
-    process.exit(1);
-  }
-
-  app.listen(PORT, () => {
-    console.log(`\n🚀  Playwright Analyzer API  →  http://localhost:${PORT}\n`);
-  });
+if (!fs.existsSync(path.join(FRONTEND_DIST, 'index.html'))) {
+  console.warn(
+    `\n⚠️  frontend/dist not found — run "npm run build" in frontend/ so the UI can be served from this port.\n`,
+  );
 }
 
-start();
+app.listen(PORT, () => {
+  console.log(`\n🚀  Playwright Analyzer  →  http://localhost:${PORT}\n`);
+});

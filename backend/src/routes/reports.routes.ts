@@ -1,7 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import multer from 'multer';
 import { createHash } from 'crypto';
-import { parsePlaywrightReport } from '../services/parser.service';
 import { reportRepository } from '../storage/store';
 import type { Environment } from '../types/report.types';
 
@@ -55,13 +54,7 @@ router.post(
     }
 
     const environment = resolveEnvironment(req.body.environment);
-    const report = await parsePlaywrightReport(
-      req.file.buffer,
-      req.file.originalname,
-      contentHash,
-      environment,
-    );
-    await reportRepository.save(report);
+    const report = await reportRepository.save(req.file.buffer, req.file.originalname, environment);
     res.status(201).json({ id: report.id, name: report.name, stats: report.stats });
   }),
 );

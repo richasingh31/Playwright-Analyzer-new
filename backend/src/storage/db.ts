@@ -1,3 +1,11 @@
+// Not currently used — storage moved to file-based (see file.store.ts), reading
+// reports straight from backend/data/<environment>/*.xml instead of a database.
+// Kept here commented out in case SQL Server storage is wanted again later.
+// To re-enable: `npm install mssql msnodesqlv8` (+ `npm install -D @types/mssql`)
+// in backend/, uncomment this file, migrations.ts and sql-server.store.ts, restore
+// the DB_* variables in backend/.env, swap the singleton in store.ts back to
+// `new SqlServerReportRepository()`, and call `runMigrations()` from index.ts.
+/*
 // Windows Authentication (Trusted Connection) has no concept on tedious (mssql's
 // default driver) — it requires the native msnodesqlv8 driver instead. Every mssql
 // import in this codebase must come from 'mssql/msnodesqlv8' consistently, or a
@@ -81,3 +89,4 @@ export async function ensureDatabaseExists(): Promise<void> {
     await masterPool.close();
   }
 }
+*/

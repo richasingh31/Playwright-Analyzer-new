@@ -1,56 +1,18 @@
-import type { ParsedReport, ReportSummary } from '../types/report.types';
-import { SqlServerReportRepository } from './sql-server.store';
+import type { ParsedReport, ReportSummary, Environment } from '../types/report.types';
+import { FileSystemReportRepository } from './file.store';
 
 /**
- * Repository interface — implement this against your database when ready.
- * Swap the singleton export below; all other code stays the same.
+ * Repository interface — swap the singleton export below to change storage
+ * backends; all other code stays the same. A SQL Server-backed implementation
+ * exists commented out in sql-server.store.ts (db.ts / migrations.ts too) if
+ * that's wanted again later — see the note atop db.ts to re-enable it.
  */
 export interface IReportRepository {
-  save(report: ParsedReport): Promise<ParsedReport>;
+  save(buffer: Buffer, fileName: string, environment: Environment): Promise<ParsedReport>;
   findById(id: string): Promise<ParsedReport | null>;
   findByContentHash(contentHash: string): Promise<ParsedReport | null>;
   findAll(): Promise<ReportSummary[]>;
   delete(id: string): Promise<boolean>;
 }
 
-class InMemoryReportRepository implements IReportRepository {
-  private readonly reports = new Map<string, ParsedReport>();
-
-  async save(report: ParsedReport): Promise<ParsedReport> {
-    this.reports.set(report.id, report);
-    return report;
-  }
-
-  async findById(id: string): Promise<ParsedReport | null> {
-    return this.reports.get(id) ?? null;
-  }
-
-  async findByContentHash(contentHash: string): Promise<ParsedReport | null> {
-    for (const report of this.reports.values()) {
-      if (report.contentHash === contentHash) return report;
-    }
-    return null;
-  }
-
-  async findAll(): Promise<ReportSummary[]> {
-    return Array.from(this.reports.values())
-      .map(({ id, name, uploadedAt, environment, stats, metadata }) => ({
-        id,
-        name,
-        uploadedAt,
-        environment,
-        stats,
-        startTime: metadata?.startTime,
-      }))
-      .sort(
-        (a, b) =>
-          new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
-      );
-  }
-
-  async delete(id: string): Promise<boolean> {
-    return this.reports.delete(id);
-  }
-}
-
-export const reportRepository: IReportRepository = new SqlServerReportRepository();
+export const reportRepository: IReportRepository = new FileSystemReportRepository();

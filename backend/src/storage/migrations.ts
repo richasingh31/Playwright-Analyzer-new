@@ -1,3 +1,6 @@
+// Not currently used — see the note atop db.ts. Kept commented out alongside
+// db.ts and sql-server.store.ts in case SQL Server storage is wanted again.
+/*
 import { getPool, ensureDatabaseExists } from './db';
 
 export async function runMigrations(): Promise<void> {
@@ -44,3 +47,4 @@ export async function runMigrations(): Promise<void> {
   `);
   console.log('Database migrations complete.');
 }
+*/
