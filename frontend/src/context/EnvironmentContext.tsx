@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Environment } from '../types';
 
 export const ENVIRONMENTS: Environment[] = ['QA', 'SIT', 'PPE'];
@@ -26,6 +26,7 @@ const SWITCH_OVERLAY_MS = 500;
 export function EnvironmentProvider({ children }: { children: ReactNode }) {
   const [environment, setEnvironmentState] = useState<Environment>(readStored);
   const [isSwitching, setIsSwitching] = useState(false);
+  const switchTimeoutRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, environment);
@@ -35,7 +36,8 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
     setEnvironmentState((prev) => {
       if (prev === env) return prev;
       setIsSwitching(true);
-      window.setTimeout(() => setIsSwitching(false), SWITCH_OVERLAY_MS);
+      window.clearTimeout(switchTimeoutRef.current);
+      switchTimeoutRef.current = window.setTimeout(() => setIsSwitching(false), SWITCH_OVERLAY_MS);
       return env;
     });
   };
