@@ -16,10 +16,6 @@ frontend/.vite/
 .env.local
 .env.*.local
 
-# Uploaded report data (file-based storage, one folder per environment)
-backend/data/*/
-!backend/data/*/.gitkeep
-
 # Logs
 *.log
 npm-debug.log*
