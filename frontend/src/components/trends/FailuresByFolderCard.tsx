@@ -351,13 +351,13 @@ function FailuresByFolderGrid({
   }
 
   const current = path.length > 0 ? path[path.length - 1].children ?? [] : folderTree;
-  // Color-ordered: perfectly healthy (green) folders always first, then
-  // ascending fail rate through light red, with darkest red (highest fail rate) last.
+  // Color-ordered: worst offenders (darkest red, highest fail rate) first,
+  // descending through lighter red, with perfectly healthy (green) folders last.
   const visible = [...current].sort((a, b) => {
     if (a.failed === 0 && b.failed === 0) return b.total - a.total;
-    if (a.failed === 0) return -1;
-    if (b.failed === 0) return 1;
-    return a.failRate - b.failRate || a.failed - b.failed;
+    if (a.failed === 0) return 1;
+    if (b.failed === 0) return -1;
+    return b.failRate - a.failRate || b.failed - a.failed;
   });
 
   const openNode = (node: FolderTreeNode) => {
