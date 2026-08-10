@@ -43,14 +43,18 @@ export function getQualityGrade(passRate: number, flaky: number, total: number) 
 
 // ── Table drawing helper ──────────────────────────────────────────────────────
 
-function truncateCell(pdf: JsPDFType, text: string, maxWidth: number): string {
-  const lines = pdf.splitTextToSize(text, maxWidth);
-  if (lines.length <= 1) return lines[0] ?? '';
-  let line = lines[0];
-  while (line.length > 1 && pdf.getTextWidth(line + '…') > maxWidth) {
-    line = line.slice(0, -1);
+// Wraps text to fit `maxWidth`, capping at `maxLines` — the last line gets an
+// ellipsis only if the text genuinely doesn't fit even across all the allowed lines.
+function wrapCell(pdf: JsPDFType, text: string, maxWidth: number, maxLines: number): string[] {
+  const lines: string[] = pdf.splitTextToSize(text, maxWidth);
+  if (lines.length <= maxLines) return lines;
+  const kept = lines.slice(0, maxLines);
+  let last = kept[maxLines - 1];
+  while (last.length > 1 && pdf.getTextWidth(last + '…') > maxWidth) {
+    last = last.slice(0, -1);
   }
-  return line.replace(/\s+$/, '') + '…';
+  kept[maxLines - 1] = last.replace(/\s+$/, '') + '…';
+  return kept;
 }
 
 function drawTable(
@@ -61,10 +65,11 @@ function drawTable(
   startY: number,
   colWidths: number[],
   maxY = 275,
+  maxLinesPerCell = 4,
 ): number {
-  const H_ROW = 8;
-  const D_ROW = 7;
-  const PAD   = 3;
+  const H_ROW  = 8;
+  const LINE_H = 3.6;
+  const PAD    = 3;
   const totalW = colWidths.reduce((a, b) => a + b, 0);
   let y = startY;
 
@@ -77,26 +82,31 @@ function drawTable(
   headers.forEach((h, i) => { pdf.text(h, cx + PAD, y + 5.5); cx += colWidths[i]; });
   y += H_ROW;
 
-  let drawnRows = 0;
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(7.5);
+
   rows.forEach((row, ri) => {
-    if (y + D_ROW > maxY) return;
-    drawnRows++;
-    if (ri % 2 === 0) { sf(pdf, C.light); pdf.rect(x, y, totalW, D_ROW, 'F'); }
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(7.5);
+    const cellLines = row.map((cell, ci) =>
+      wrapCell(pdf, String(cell), colWidths[ci] - PAD * 2, maxLinesPerCell),
+    );
+    const lineCount = Math.max(1, ...cellLines.map((l) => l.length));
+    const rowH = lineCount * LINE_H + PAD * 1.4;
+    if (y + rowH > maxY) return;
+    if (ri % 2 === 0) { sf(pdf, C.light); pdf.rect(x, y, totalW, rowH, 'F'); }
     st(pdf, C.text);
     cx = x;
-    row.forEach((cell, ci) => {
-      const t = truncateCell(pdf, String(cell), colWidths[ci] - PAD * 2);
-      pdf.text(t, cx + PAD, y + 5);
+    cellLines.forEach((lines, ci) => {
+      lines.forEach((line, li) => {
+        pdf.text(line, cx + PAD, y + PAD + 1.7 + li * LINE_H);
+      });
       cx += colWidths[ci];
     });
-    y += D_ROW;
+    y += rowH;
   });
 
   sd(pdf, C.border);
   pdf.setLineWidth(0.3);
-  pdf.rect(x, startY, totalW, H_ROW + drawnRows * D_ROW, 'S');
+  pdf.rect(x, startY, totalW, y - startY, 'S');
   return y + 4;
 }
 
@@ -688,7 +698,7 @@ export async function exportTrendsPDF(reports: ReportSummary[], kindLabel: 'API'
     PAGE_W,
   );
   const reportRows = [...recent].reverse().map((r) => [
-    r.name.length > 34 ? r.name.substring(0, 34) + '…' : r.name,
+    r.name,
     formatDate(r.startTime ? new Date(r.startTime).toISOString() : r.uploadedAt),
     `${r.stats.passRate}%`,
     String(r.stats.total),
@@ -702,7 +712,7 @@ export async function exportTrendsPDF(reports: ReportSummary[], kindLabel: 'API'
     ['Report', 'Date', 'Pass%', 'Total', 'Passed', 'Failed', 'Flaky', 'Duration'],
     reportRows,
     M, y,
-    [50, 38, 16, 16, 16, 16, 16, 22],
+    [47, 36, 15, 15, 15, 15, 15, 22],
     MAX_Y,
   );
 
@@ -1000,7 +1010,7 @@ export async function exportScenariosPDF(input: ScenariosPDFInput): Promise<void
       M, y, PAGE_W,
     );
     const rows = group.scenarios.map((s) => [s.title, s.latestStatus, String(s.failCount)]);
-    y = drawTable(pdf, ['Scenario', 'Latest Status', 'Fail Count'], rows, M, y, [126, 34, 30], MAX_Y);
+    y = drawTable(pdf, ['Scenario', 'Latest Status', 'Fail Count'], rows, M, y, [116, 34, 30], MAX_Y);
   });
 
   // ── Footers ───────────────────────────────────────────────────────────────────
@@ -1188,7 +1198,7 @@ export async function exportDrillDownPDF(input: DrillDownPDFInput): Promise<void
     String(t.retries),
     t.errorMessage ? `${t.errorCategory ? `[${t.errorCategory}] ` : ''}${t.errorMessage.split('\n')[0]}` : '—',
   ]);
-  drawTable(pdf, ['Test', 'File', 'Duration', 'Retries', 'Error'], rows, M, y, [42, 34, 20, 18, 66], MAX_Y);
+  drawTable(pdf, ['Test', 'File', 'Duration', 'Retries', 'Error'], rows, M, y, [54, 36, 16, 14, 60], MAX_Y);
 
   // ── Footers ───────────────────────────────────────────────────────────────────
   const pages = pdf.getNumberOfPages();

@@ -196,7 +196,7 @@ function buildPatterns(reports: ParsedReport[]) {
   const suiteMap = new Map<string, { passed: number; failed: number; total: number }>();
   reports.forEach((r) => {
     r.suites.forEach((s) => {
-      const name = trunc(s.title || s.file, 40);
+      const name = s.title || s.file;
       const prev = suiteMap.get(name) ?? { passed: 0, failed: 0, total: 0 };
       suiteMap.set(name, {
         passed: prev.passed + s.stats.passed,
