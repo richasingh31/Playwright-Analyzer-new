@@ -560,7 +560,7 @@ export function TrendsPage() {
 
           <Card>
             <CardHeader
-              title="UI Test"
+              title="UI Test (Estimation AI)"
               subtitle={latestUiReport ? latestUiReport.summary.name : 'No UI test reports yet'}
               action={
                 latestUiReport ? (

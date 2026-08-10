@@ -58,11 +58,19 @@ export interface RegressionItem {
 interface FlakyStat {
   testKey: string;
   testLabel: string;
+  file: string;
   flips: number;
   totalRuns: number;
   flakinessScore: number;
   passed: number;
   failed: number;
+}
+
+interface AlwaysFailingTest {
+  testKey: string;
+  testLabel: string;
+  file: string;
+  totalRuns: number;
 }
 
 export interface SuiteHealth {
@@ -125,6 +133,7 @@ function buildPatterns(reports: ParsedReport[]) {
   // Per-test tracking across all runs
   const testMap = new Map<string, {
     label: string;
+    file: string;
     byReport: Map<string, CellStatus>;
   }>();
 
@@ -134,7 +143,7 @@ function buildPatterns(reports: ParsedReport[]) {
       if (seen.has(test.fullTitle)) return;
       seen.add(test.fullTitle);
       if (!testMap.has(test.fullTitle)) {
-        testMap.set(test.fullTitle, { label: test.title, byReport: new Map() });
+        testMap.set(test.fullTitle, { label: test.title, file: test.file, byReport: new Map() });
       }
       testMap.get(test.fullTitle)!.byReport.set(
         report.id,
@@ -169,6 +178,7 @@ function buildPatterns(reports: ParsedReport[]) {
       return {
         testKey: key,
         testLabel: trunc(v.label, 52),
+        file: v.file,
         flips,
         totalRuns: statusList.length,
         flakinessScore: statusList.length > 1
@@ -224,10 +234,23 @@ function buildPatterns(reports: ParsedReport[]) {
   });
 
   // ── Summary stats ───────────────────────────────────────────────────────────
-  const consistentlyFailing = Array.from(testMap.entries()).filter(([, v]) => {
-    const statuses = sorted.map((r) => v.byReport.get(r.id)).filter(Boolean) as CellStatus[];
-    return statuses.length >= 2 && statuses.every((s) => s === 'failed' || s === 'flaky');
-  }).length;
+  const consistentlyFailingTests: AlwaysFailingTest[] = Array.from(testMap.entries())
+    .filter(([, v]) => {
+      const statuses = sorted.map((r) => v.byReport.get(r.id)).filter(Boolean) as CellStatus[];
+      return statuses.length >= 2 && statuses.every((s) => s === 'failed' || s === 'flaky');
+    })
+    .map(([key, v]) => {
+      const statuses = sorted.map((r) => v.byReport.get(r.id)).filter(Boolean) as CellStatus[];
+      return {
+        testKey: key,
+        testLabel: trunc(v.label, 60),
+        file: v.file,
+        totalRuns: statuses.length,
+      };
+    })
+    .sort((a, b) => a.testLabel.localeCompare(b.testLabel));
+
+  const consistentlyFailing = consistentlyFailingTests.length;
 
   const totalErrors = (e: ErrorEvoEntry) =>
     e.Assertion + e.Timeout + e.Network + e.Element + e.Runtime + e.Application;
@@ -265,6 +288,7 @@ function buildPatterns(reports: ParsedReport[]) {
     suiteHealth,
     errorEvolution,
     consistentlyFailing,
+    consistentlyFailingTests,
     flakyCount: flakyStats.length,
     hasErrors: errorEvolution.some((e) => totalErrors(e) > 0),
     regressions,
@@ -658,6 +682,8 @@ function MetricCard({
   icon,
   valueClassName,
   valueTitle,
+  onClick,
+  expanded,
 }: {
   label: string;
   value: React.ReactNode;
@@ -666,12 +692,21 @@ function MetricCard({
   icon: React.ReactNode;
   valueClassName?: string;
   valueTitle?: string;
+  onClick?: () => void;
+  expanded?: boolean;
 }) {
   return (
-    <Card className="py-4 px-4">
+    <Card className="py-4 px-4" onClick={onClick} hoverable={!!onClick}>
       <div className="flex items-start justify-between mb-3">
         <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</span>
-        <span className={accent}>{icon}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={accent}>{icon}</span>
+          {onClick && (
+            expanded
+              ? <ChevronUp className="h-4 w-4 text-slate-400" />
+              : <ChevronDown className="h-4 w-4 text-slate-400" />
+          )}
+        </div>
       </div>
       <div
         className={`font-bold mb-0.5 ${accent} ${valueClassName ?? 'text-2xl'}`}
@@ -686,6 +721,60 @@ function MetricCard({
   );
 }
 
+// ── Expandable test list (Always Failing / Flaky Tests drill-down) ─────────────
+
+function TestListCard({
+  title,
+  subtitle,
+  accentColor,
+  rows,
+  onClose,
+}: {
+  title: string;
+  subtitle: string;
+  accentColor: string;
+  rows: { key: string; label: string; file: string; right: React.ReactNode }[];
+  onClose: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader
+        title={title}
+        subtitle={subtitle}
+        action={
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+            Collapse
+          </button>
+        }
+      />
+      <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+        {rows.map((r) => (
+          <div
+            key={r.key}
+            className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800 truncate" title={r.label}>
+                {r.label}
+              </p>
+              <p className="text-xs text-slate-500 truncate" title={r.file}>
+                {r.file.split(/[\\/]/).slice(-2).join('/')}
+              </p>
+            </div>
+            <div className="shrink-0 text-xs font-medium whitespace-nowrap" style={{ color: accentColor }}>
+              {r.right}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function FailurePatternsPage() {
@@ -695,6 +784,8 @@ export function FailurePatternsPage() {
   const [error, setError] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [reportKind, setReportKind] = useState<ReportKind>('api');
+  const [showAlwaysFailing, setShowAlwaysFailing] = useState(false);
+  const [showFlaky, setShowFlaky] = useState(false);
 
   const loadReports = () => {
     return reportsApi
@@ -795,6 +886,8 @@ export function FailurePatternsPage() {
     suiteHealth,
     errorEvolution,
     consistentlyFailing,
+    consistentlyFailingTests,
+    flakyStats,
     flakyCount,
     hasErrors,
     sortedDates,
@@ -851,6 +944,8 @@ export function FailurePatternsPage() {
           sub="fail in every run"
           accent="text-red-600"
           icon={<AlertOctagon className="h-5 w-5" />}
+          onClick={consistentlyFailing > 0 ? () => setShowAlwaysFailing((v) => !v) : undefined}
+          expanded={showAlwaysFailing}
         />
         <MetricCard
           label="Flaky Tests"
@@ -858,8 +953,40 @@ export function FailurePatternsPage() {
           sub="oscillate pass ↔ fail"
           accent="text-amber-600"
           icon={<RefreshCw className="h-5 w-5" />}
+          onClick={flakyCount > 0 ? () => setShowFlaky((v) => !v) : undefined}
+          expanded={showFlaky}
         />
       </div>
+
+      {showAlwaysFailing && consistentlyFailingTests.length > 0 && (
+        <TestListCard
+          title="Always Failing Tests"
+          subtitle={`${consistentlyFailingTests.length} test${consistentlyFailingTests.length !== 1 ? 's' : ''} failing in every run`}
+          accentColor="#dc2626"
+          onClose={() => setShowAlwaysFailing(false)}
+          rows={consistentlyFailingTests.map((t) => ({
+            key: t.testKey,
+            label: t.testLabel,
+            file: t.file,
+            right: `${t.totalRuns} runs`,
+          }))}
+        />
+      )}
+
+      {showFlaky && flakyStats.length > 0 && (
+        <TestListCard
+          title="Flaky Tests"
+          subtitle={`${flakyStats.length} test${flakyStats.length !== 1 ? 's' : ''} oscillating between pass and fail`}
+          accentColor="#d97706"
+          onClose={() => setShowFlaky(false)}
+          rows={flakyStats.map((t) => ({
+            key: t.testKey,
+            label: t.testLabel,
+            file: t.file,
+            right: `${t.flakinessScore}% flaky · ${t.passed}p / ${t.failed}f`,
+          }))}
+        />
+      )}
 
       {/* Regression Detector */}
       <RegressionSection
