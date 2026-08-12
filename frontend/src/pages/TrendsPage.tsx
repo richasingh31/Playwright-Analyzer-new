@@ -527,65 +527,6 @@ export function TrendsPage() {
         )}
       </div>
 
-      {/* Latest run snapshot — API vs UI test breakdown, independent of the date filter below */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-bold text-slate-800">Latest Runs</h2>
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader
-              title="API Tests"
-              subtitle={latestApiReport ? latestApiReport.summary.name : 'No API test reports yet'}
-              action={
-                latestApiReport ? (
-                  <span className="text-xs text-slate-400">
-                    {formatDate(
-                      latestApiReport.summary.startTime
-                        ? new Date(latestApiReport.summary.startTime).toISOString()
-                        : latestApiReport.summary.uploadedAt,
-                    )}
-                  </span>
-                ) : undefined
-              }
-            />
-            {latestApiReport ? (
-              <>
-                <StatusDonutChart stats={latestApiReport.summary.stats} reportId={latestApiReport.summary.id} size="sm" />
-                <KpiRow latest={apiReports[0]} previous={apiReports[1]} />
-              </>
-            ) : (
-              <p className="text-center text-sm text-slate-500 py-16">No API test reports uploaded yet.</p>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader
-              title="UI Test (Estimation AI)"
-              subtitle={latestUiReport ? latestUiReport.summary.name : 'No UI test reports yet'}
-              action={
-                latestUiReport ? (
-                  <span className="text-xs text-slate-400">
-                    {formatDate(
-                      latestUiReport.summary.startTime
-                        ? new Date(latestUiReport.summary.startTime).toISOString()
-                        : latestUiReport.summary.uploadedAt,
-                    )}
-                  </span>
-                ) : undefined
-              }
-            />
-            {latestUiReport ? (
-              <>
-                <StatusDonutChart stats={latestUiReport.summary.stats} reportId={latestUiReport.summary.id} size="sm" />
-                <KpiRow latest={uiReports[0]} previous={uiReports[1]} />
-              </>
-            ) : (
-              <p className="text-center text-sm text-slate-500 py-16">No UI test reports uploaded yet.</p>
-            )}
-          </Card>
-        </div>
-      </div>
-
       {/* Report type + date range filter — applies to every section below */}
       <Card className="py-5 px-5">
         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:flex-wrap">
@@ -669,6 +610,65 @@ export function TrendsPage() {
           </Card>
         </div>
       )}
+
+      {/* Latest run snapshot — API vs UI test breakdown, independent of the date filter above */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-bold text-slate-800">Latest Runs</h2>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader
+              title="API Tests"
+              subtitle={latestApiReport ? latestApiReport.summary.name : 'No API test reports yet'}
+              action={
+                latestApiReport ? (
+                  <span className="text-xs text-slate-400">
+                    {formatDate(
+                      latestApiReport.summary.startTime
+                        ? new Date(latestApiReport.summary.startTime).toISOString()
+                        : latestApiReport.summary.uploadedAt,
+                    )}
+                  </span>
+                ) : undefined
+              }
+            />
+            {latestApiReport ? (
+              <>
+                <StatusDonutChart stats={latestApiReport.summary.stats} reportId={latestApiReport.summary.id} size="sm" />
+                <KpiRow latest={apiReports[0]} previous={apiReports[1]} />
+              </>
+            ) : (
+              <p className="text-center text-sm text-slate-500 py-16">No API test reports uploaded yet.</p>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="UI Test (Estimation AI)"
+              subtitle={latestUiReport ? latestUiReport.summary.name : 'No UI test reports yet'}
+              action={
+                latestUiReport ? (
+                  <span className="text-xs text-slate-400">
+                    {formatDate(
+                      latestUiReport.summary.startTime
+                        ? new Date(latestUiReport.summary.startTime).toISOString()
+                        : latestUiReport.summary.uploadedAt,
+                    )}
+                  </span>
+                ) : undefined
+              }
+            />
+            {latestUiReport ? (
+              <>
+                <StatusDonutChart stats={latestUiReport.summary.stats} reportId={latestUiReport.summary.id} size="sm" />
+                <KpiRow latest={uiReports[0]} previous={uiReports[1]} />
+              </>
+            ) : (
+              <p className="text-center text-sm text-slate-500 py-16">No UI test reports uploaded yet.</p>
+            )}
+          </Card>
+        </div>
+      </div>
 
       {/* Failures by Folder */}
       <FailuresByFolderCard reports={filteredFullReports} />
