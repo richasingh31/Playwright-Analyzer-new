@@ -135,10 +135,10 @@ export function DurationTrendChart({
   const sorted = [...reports]
     .sort(
       (a, b) =>
-        (a.startTime ?? new Date(a.uploadedAt).getTime()) -
-        (b.startTime ?? new Date(b.uploadedAt).getTime()),
+        (b.startTime ?? new Date(b.uploadedAt).getTime()) -
+        (a.startTime ?? new Date(a.uploadedAt).getTime()),
     )
-    .slice(-maxRuns);
+    .slice(0, maxRuns);
 
   const data: DataPoint[] = sorted.map((r) => ({
     date: shortDate(r),

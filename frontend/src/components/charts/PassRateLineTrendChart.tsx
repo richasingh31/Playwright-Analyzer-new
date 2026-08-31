@@ -88,8 +88,8 @@ function TopValueLabel(props: { x?: number; y?: number; value?: number | string;
 }
 
 export function PassRateLineTrendChart({ reports, days = 5, metric = 'pass' }: Props) {
-  const sorted = [...reports].sort((a, b) => reportTime(a) - reportTime(b));
-  const recent = sorted.slice(-days);
+  const sorted = [...reports].sort((a, b) => reportTime(b) - reportTime(a));
+  const recent = sorted.slice(0, days);
 
   const data: ChartEntry[] = recent.map((r) => ({
     date: getReportDate(r),

@@ -114,20 +114,42 @@ const METRIC_TONES = {
   },
 } as const;
 
+// Qualitative delta between the latest run and the one before it.
+// `invert` flips good/bad coloring for metrics where a rise is undesirable (e.g. fail rate).
+function rateDeltaLabel(
+  current: number,
+  previous: number | undefined,
+  invert = false,
+): { text: string; direction: 'up' | 'down' | 'flat'; good: boolean } | null {
+  if (previous === undefined) return null;
+  const delta = current - previous;
+  if (Math.abs(delta) < 0.5) return { text: 'No change from last run', direction: 'flat', good: true };
+  const magnitude = Math.abs(delta) < 5 ? 'low' : Math.abs(delta) < 15 ? 'moderate' : 'high';
+  const direction = delta > 0 ? 'increase' : 'decrease';
+  return {
+    text: `${magnitude} ${direction} from last run (${delta > 0 ? '+' : ''}${Math.round(delta)}%)`,
+    direction: delta > 0 ? 'up' : 'down',
+    good: invert ? delta < 0 : delta > 0,
+  };
+}
+
 function MetricCard({
   icon,
   label,
   value,
   sub,
+  delta,
   tone = 'neutral',
 }: {
   icon?: React.ReactNode;
   label: string;
   value: string | number;
   sub?: string;
+  delta?: { text: string; direction: 'up' | 'down' | 'flat'; good: boolean } | null;
   tone?: keyof typeof METRIC_TONES;
 }) {
   const palette = METRIC_TONES[tone];
+  const deltaColor = !delta || delta.direction === 'flat' ? 'text-slate-500' : delta.good ? 'text-emerald-600' : 'text-red-600';
   return (
     <Card
       className="text-center py-5"
@@ -141,6 +163,14 @@ function MetricCard({
       <p className={`text-3xl font-bold ${palette.text}`}>{value}</p>
       <p className="text-sm text-slate-600 mt-1">{label}</p>
       {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
+      {delta && (
+        <p className={`mt-1 flex items-center justify-center gap-1 text-xs font-medium ${deltaColor}`}>
+          {delta.direction === 'up' && <TrendingUp className="h-3 w-3" />}
+          {delta.direction === 'down' && <TrendingDown className="h-3 w-3" />}
+          {delta.direction === 'flat' && <Minus className="h-3 w-3" />}
+          {delta.text}
+        </p>
+      )}
     </Card>
   );
 }
@@ -465,18 +495,37 @@ export function TrendsPage() {
   if (loading) return <FullPageSpinner label="Loading trends…" />;
   if (error) return <ErrorState message={error} />;
 
+  // filteredReports is sorted most-recent-first, so this is the last 3 reports uploaded.
+  const last3Reports = filteredReports.slice(0, 3);
+
   const avgPassRate =
-    filteredReports.length > 0
-      ? Math.round(filteredReports.reduce((s, r) => s + r.stats.passRate, 0) / filteredReports.length)
+    last3Reports.length > 0
+      ? Math.round(last3Reports.reduce((s, r) => s + r.stats.passRate, 0) / last3Reports.length)
       : 0;
 
   const avgFailRate =
-    filteredReports.length > 0
+    last3Reports.length > 0
       ? Math.round(
-          filteredReports.reduce((s, r) => s + (r.stats.total > 0 ? (r.stats.failed / r.stats.total) * 100 : 0), 0) /
-            filteredReports.length,
+          last3Reports.reduce((s, r) => s + (r.stats.total > 0 ? (r.stats.failed / r.stats.total) * 100 : 0), 0) /
+            last3Reports.length,
         )
       : 0;
+
+  const latestRun = filteredReports[0];
+  const previousRun = filteredReports[1];
+  const latestFailRate = latestRun
+    ? latestRun.stats.total > 0
+      ? Math.round((latestRun.stats.failed / latestRun.stats.total) * 100)
+      : 0
+    : undefined;
+  const previousFailRate = previousRun
+    ? previousRun.stats.total > 0
+      ? Math.round((previousRun.stats.failed / previousRun.stats.total) * 100)
+      : 0
+    : undefined;
+
+  const passRateDelta = latestRun ? rateDeltaLabel(latestRun.stats.passRate, previousRun?.stats.passRate) : null;
+  const failRateDelta = latestFailRate !== undefined ? rateDeltaLabel(latestFailRate, previousFailRate, true) : null;
 
   const minDateVal = viewReports.length ? toDateInputValue(reportTime(viewReports[viewReports.length - 1])) : '';
   const maxDateVal = viewReports.length ? toDateInputValue(reportTime(viewReports[0])) : '';
@@ -570,14 +619,16 @@ export function TrendsPage() {
           icon={<TrendingUp className="h-4 w-4" />}
           label="Avg Pass Rate"
           value={`${avgPassRate}%`}
-          sub="across selected runs"
+          sub={`avg of last ${last3Reports.length} report${last3Reports.length === 1 ? '' : 's'} uploaded`}
+          delta={passRateDelta}
           tone="emerald"
         />
         <MetricCard
           icon={<TrendingDown className="h-4 w-4" />}
           label="Avg Fail Rate"
           value={`${avgFailRate}%`}
-          sub="across selected runs"
+          sub={`avg of last ${last3Reports.length} report${last3Reports.length === 1 ? '' : 's'} uploaded`}
+          delta={failRateDelta}
           tone="red"
         />
       </div>

@@ -126,9 +126,9 @@ export function TrendsLineChart({ reports, maxRuns = 8 }: Props) {
   const sorted = [...reports].sort((a, b) => {
     const aTime = a.startTime ?? new Date(a.uploadedAt).getTime();
     const bTime = b.startTime ?? new Date(b.uploadedAt).getTime();
-    return aTime - bTime;
+    return bTime - aTime;
   });
-  const recent = sorted.slice(-maxRuns);
+  const recent = sorted.slice(0, maxRuns);
 
   const data: ChartEntry[] = recent.map((r) => ({
     date: getReportDate(r),
