@@ -419,12 +419,12 @@ export function TrendsPage() {
     [fullReports, environment],
   );
 
-  // The Latest Run row always shows one general-API card and one Estimation AI
-  // API card side by side, regardless of the report-type toggle below — so it
-  // needs its own strictly API-only subsets, separate from the toggle-driven
-  // "view" used everywhere else. Estimation AI's BrowserStack API suites are
-  // still classified 'api' (by hostname), so they're split out by folder here
-  // rather than by ui/api kind.
+  // The Latest Run row mirrors the report-type toggle below: the API cards
+  // (general + Estimation AI) show for 'api'/'all', the Estimation AI UI card
+  // shows for 'ui'/'all'. So each bucket is scoped to the environment only,
+  // not to `reportKind` — the JSX below decides which cards to render.
+  // Estimation AI's BrowserStack API suites are still classified 'api' (by
+  // hostname), so they're split out by folder here rather than by ui/api kind.
   const apiFullReports = useMemo(
     () => envFullReports.filter((r) => classifyReportKind(r) !== 'ui' && !isEstimationAIReport(r)),
     [envFullReports],
@@ -442,6 +442,15 @@ export function TrendsPage() {
     const estimationAiIds = new Set(estimationAiFullReports.map((r) => r.id));
     return reports.filter((r) => estimationAiIds.has(r.id));
   }, [reports, estimationAiFullReports]);
+
+  const estimationAiUiFullReports = useMemo(
+    () => envFullReports.filter((r) => classifyReportKind(r) === 'ui'),
+    [envFullReports],
+  );
+  const estimationAiUiReports = useMemo(() => {
+    const uiIds = new Set(estimationAiUiFullReports.map((r) => r.id));
+    return reports.filter((r) => uiIds.has(r.id));
+  }, [reports, estimationAiUiFullReports]);
 
   // Everything below the Latest Run row (date range, avg rates, charts, heatmap,
   // top failures, all-reports table) reflects whichever kind is selected here.
@@ -496,6 +505,12 @@ export function TrendsPage() {
       ? { summary: estimationAiReports[0], full: estimationAiFullReports[0] }
       : undefined;
   }, [estimationAiReports, estimationAiFullReports]);
+
+  const latestEstimationAiUiReport = useMemo(() => {
+    return estimationAiUiReports.length > 0
+      ? { summary: estimationAiUiReports[0], full: estimationAiUiFullReports[0] }
+      : undefined;
+  }, [estimationAiUiReports, estimationAiUiFullReports]);
 
   if (loading) return <FullPageSpinner label="Loading trends…" />;
   if (error) return <ErrorState message={error} />;
@@ -668,11 +683,22 @@ export function TrendsPage() {
         </div>
       )}
 
-      {/* Latest run snapshot — API vs UI test breakdown, independent of the date filter above */}
+      {/* Latest run snapshot — mirrors the Report Type toggle above, independent
+          of the date filter. API cards show for 'api'/'all', the Estimation AI
+          UI card shows for 'ui'/'all'. */}
       <div className="space-y-3">
         <h2 className="text-sm font-bold text-slate-800">Latest Runs</h2>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div
+          className={
+            reportKind === 'ui'
+              ? 'grid grid-cols-1 gap-6'
+              : reportKind === 'all'
+              ? 'grid grid-cols-1 gap-6 lg:grid-cols-3'
+              : 'grid grid-cols-1 gap-6 lg:grid-cols-2'
+          }
+        >
+          {(reportKind === 'api' || reportKind === 'all') && (
           <Card>
             <CardHeader
               title="Estimation- API tests"
@@ -698,7 +724,9 @@ export function TrendsPage() {
               <p className="text-center text-sm text-slate-500 py-16">No API test reports uploaded yet.</p>
             )}
           </Card>
+          )}
 
+          {(reportKind === 'api' || reportKind === 'all') && (
           <Card>
             <CardHeader
               title="Estimation AI- API tests"
@@ -728,6 +756,39 @@ export function TrendsPage() {
               <p className="text-center text-sm text-slate-500 py-16">No Estimation AI test reports uploaded yet.</p>
             )}
           </Card>
+          )}
+
+          {(reportKind === 'ui' || reportKind === 'all') && (
+          <Card>
+            <CardHeader
+              title="Estimation AI- UI tests"
+              subtitle={latestEstimationAiUiReport ? latestEstimationAiUiReport.summary.name : 'No Estimation AI UI test reports yet'}
+              action={
+                latestEstimationAiUiReport ? (
+                  <span className="text-xs text-slate-400">
+                    {formatDate(
+                      latestEstimationAiUiReport.summary.startTime
+                        ? new Date(latestEstimationAiUiReport.summary.startTime).toISOString()
+                        : latestEstimationAiUiReport.summary.uploadedAt,
+                    )}
+                  </span>
+                ) : undefined
+              }
+            />
+            {latestEstimationAiUiReport ? (
+              <>
+                <StatusDonutChart
+                  stats={latestEstimationAiUiReport.summary.stats}
+                  reportId={latestEstimationAiUiReport.summary.id}
+                  size="sm"
+                />
+                <KpiRow latest={estimationAiUiReports[0]} previous={estimationAiUiReports[1]} />
+              </>
+            ) : (
+              <p className="text-center text-sm text-slate-500 py-16">No Estimation AI UI test reports uploaded yet.</p>
+            )}
+          </Card>
+          )}
         </div>
       </div>
 
