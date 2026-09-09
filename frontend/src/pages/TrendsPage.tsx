@@ -23,7 +23,14 @@ import {
 } from 'lucide-react';
 import { reportsApi } from '../api/client';
 import type { ParsedReport, ReportSummary } from '../types';
-import { formatDuration, formatDate, classifyReportKind, isEstimationAIReport } from '../utils/helpers';
+import {
+  formatDuration,
+  formatDate,
+  classifyReportKind,
+  isEstimationAIReport,
+  classifyReportPipeline,
+  reportPipelineShortLabel,
+} from '../utils/helpers';
 import { TrendsLineChart } from '../components/charts/TrendsLineChart';
 import { StatusDonutChart } from '../components/charts/StatusDonutChart';
 import { PassRateLineTrendChart } from '../components/charts/PassRateLineTrendChart';
@@ -34,7 +41,7 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
-import { ReportKindSelect, reportKindLabel, type ReportKind } from '../components/ui/ReportKindSelect';
+import { ReportPipelineSelect, availablePipelines, type PipelineFilter } from '../components/ui/ReportPipelineSelect';
 import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { exportTrendsPDF } from '../utils/pdfExport';
 import { useEnvironment } from '../context/EnvironmentContext';
@@ -375,7 +382,7 @@ export function TrendsPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [reportKind, setReportKind] = useState<ReportKind>('all');
+  const [reportPipeline, setReportPipeline] = useState<PipelineFilter>('all');
   const [reportsPage, setReportsPage] = useState(0);
   const REPORTS_PAGE_SIZE = 8;
 
@@ -400,6 +407,15 @@ export function TrendsPage() {
     loadReports();
   }, []);
 
+  // Reset the pipeline filter if the newly-selected environment doesn't offer it
+  // (e.g. switching to PPE while "Estimation API Tests" was selected — PPE only
+  // runs the Estimation AI-UI pipeline).
+  useEffect(() => {
+    if (reportPipeline !== 'all' && !availablePipelines(environment).includes(reportPipeline)) {
+      setReportPipeline('all');
+    }
+  }, [environment, reportPipeline]);
+
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Delete this report? This action cannot be undone.')) return;
@@ -419,12 +435,15 @@ export function TrendsPage() {
     [fullReports, environment],
   );
 
-  // The Latest Run row mirrors the report-type toggle below: the API cards
-  // (general + Estimation AI) show for 'api'/'all', the Estimation AI UI card
-  // shows for 'ui'/'all'. So each bucket is scoped to the environment only,
-  // not to `reportKind` — the JSX below decides which cards to render.
-  // Estimation AI's BrowserStack API suites are still classified 'api' (by
-  // hostname), so they're split out by folder here rather than by ui/api kind.
+  // The Latest Run row mirrors the report-type toggle below, unchanged from before
+  // the pipeline dropdown existed: the API cards (general + Estimation AI) show for
+  // 'api'/'all', the Estimation AI UI card shows for 'ui'/'all' — see `latestRunsKind`
+  // below, which collapses the new 3-way pipeline selection back onto this coarser
+  // api/ui/all split so this row's behavior stays exactly as it was. So each bucket
+  // is scoped to the environment only, not to the selected pipeline — the JSX below
+  // decides which cards to render. Estimation AI's BrowserStack API suites are still
+  // classified 'api' (by hostname), so they're split out by folder here rather than
+  // by ui/api kind.
   const apiFullReports = useMemo(
     () => envFullReports.filter((r) => classifyReportKind(r) !== 'ui' && !isEstimationAIReport(r)),
     [envFullReports],
@@ -452,11 +471,17 @@ export function TrendsPage() {
     return reports.filter((r) => uiIds.has(r.id));
   }, [reports, estimationAiUiFullReports]);
 
+  // The Latest Runs row keeps its pre-existing api/ui/all behavior unchanged: both
+  // the "Estimation API" and "Estimation AI-API" pipelines collapse to the same
+  // 'api' bucket it always used, so picking either still shows both Latest Run cards.
+  const latestRunsKind: 'all' | 'api' | 'ui' =
+    reportPipeline === 'all' ? 'all' : reportPipeline === 'estimation-ai-ui' ? 'ui' : 'api';
+
   // Everything below the Latest Run row (date range, avg rates, charts, heatmap,
-  // top failures, all-reports table) reflects whichever kind is selected here.
+  // top failures, all-reports table) reflects whichever pipeline is selected here.
   const viewFullReports = useMemo(
-    () => envFullReports.filter((r) => reportKind === 'all' || classifyReportKind(r) === reportKind),
-    [envFullReports, reportKind],
+    () => envFullReports.filter((r) => reportPipeline === 'all' || classifyReportPipeline(r) === reportPipeline),
+    [envFullReports, reportPipeline],
   );
   const viewReports = useMemo(() => {
     const viewIds = new Set(viewFullReports.map((r) => r.id));
@@ -488,7 +513,7 @@ export function TrendsPage() {
   // Reset to page 1 whenever the underlying report set changes shape.
   useEffect(() => {
     setReportsPage(0);
-  }, [reportKind, dateFrom, dateTo, filteredReports.length]);
+  }, [reportPipeline, dateFrom, dateTo, filteredReports.length]);
 
   const reportsPageCount = Math.max(1, Math.ceil(filteredReports.length / REPORTS_PAGE_SIZE));
   const pagedReports = filteredReports.slice(
@@ -551,7 +576,7 @@ export function TrendsPage() {
   const maxDateVal = viewReports.length ? toDateInputValue(reportTime(viewReports[0])) : '';
 
   const rangeLabel = formatRangeLabel(dateFrom, dateTo);
-  const kindPhrase = reportKind === 'all' ? 'All Tests' : reportKindLabel(reportKind);
+  const kindPhrase = reportPipeline === 'all' ? 'All Tests' : reportPipelineShortLabel(reportPipeline);
 
   if (reports.length === 0) {
     return (
@@ -600,7 +625,7 @@ export function TrendsPage() {
       {/* Report type + date range filter — applies to every section below */}
       <Card className="py-5 px-5">
         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:flex-wrap">
-          <ReportKindSelect value={reportKind} onChange={setReportKind} />
+          <ReportPipelineSelect value={reportPipeline} onChange={setReportPipeline} environment={environment} />
           <div className="hidden h-8 w-px bg-slate-200 sm:block" />
           <DateRangeFilter
             from={dateFrom}
@@ -620,7 +645,7 @@ export function TrendsPage() {
         <div className="h-px flex-1 bg-slate-200" />
         <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
           <CalendarRange className="h-3.5 w-3.5 text-indigo-500" />
-          {reportKindLabel(reportKind)} Tests — Analysis for {rangeLabel}
+          {reportPipeline === 'all' ? 'All' : reportPipelineShortLabel(reportPipeline)} Tests — Analysis for {rangeLabel}
         </span>
         <div className="h-px flex-1 bg-slate-200" />
       </div>
@@ -629,7 +654,7 @@ export function TrendsPage() {
         <div className="text-center py-16 text-slate-500">
           <CalendarRange className="h-8 w-8 mx-auto mb-3 opacity-40" />
           <p className="text-sm">
-            No {reportKind === 'all' ? '' : `${reportKindLabel(reportKind)} `}test reports in the selected date range.
+            No {reportPipeline === 'all' ? '' : `${reportPipelineShortLabel(reportPipeline)} `}test reports in the selected date range.
           </p>
         </div>
       ) : (
@@ -691,14 +716,14 @@ export function TrendsPage() {
 
         <div
           className={
-            reportKind === 'ui'
+            latestRunsKind === 'ui'
               ? 'grid grid-cols-1 gap-6'
-              : reportKind === 'all'
+              : latestRunsKind === 'all'
               ? 'grid grid-cols-1 gap-6 lg:grid-cols-3'
               : 'grid grid-cols-1 gap-6 lg:grid-cols-2'
           }
         >
-          {(reportKind === 'api' || reportKind === 'all') && (
+          {(latestRunsKind === 'api' || latestRunsKind === 'all') && (
           <Card>
             <CardHeader
               title="Estimation- API tests"
@@ -726,7 +751,7 @@ export function TrendsPage() {
           </Card>
           )}
 
-          {(reportKind === 'api' || reportKind === 'all') && (
+          {(latestRunsKind === 'api' || latestRunsKind === 'all') && (
           <Card>
             <CardHeader
               title="Estimation AI- API tests"
@@ -758,7 +783,7 @@ export function TrendsPage() {
           </Card>
           )}
 
-          {(reportKind === 'ui' || reportKind === 'all') && (
+          {(latestRunsKind === 'ui' || latestRunsKind === 'all') && (
           <Card>
             <CardHeader
               title="Estimation AI- UI tests"

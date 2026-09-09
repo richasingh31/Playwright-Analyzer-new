@@ -189,3 +189,15 @@ export function reportPipelineLabel(pipeline: ReportPipeline): string {
       return 'Estimation AI-UI Tests';
   }
 }
+
+/** Same as reportPipelineLabel but without the trailing "Tests", for phrases like "{label} Automation". */
+export function reportPipelineShortLabel(pipeline: ReportPipeline): string {
+  switch (pipeline) {
+    case 'estimation-api':
+      return 'Estimation API';
+    case 'estimation-ai-api':
+      return 'Estimation AI-API';
+    case 'estimation-ai-ui':
+      return 'Estimation AI-UI';
+  }
+}
