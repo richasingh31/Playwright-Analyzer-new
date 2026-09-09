@@ -164,3 +164,28 @@ export function classifyReportKind(
 export function isEstimationAIReport(report: import('../types').ParsedReport): boolean {
   return dominantTopFolder(report).toLowerCase() === 'estimationai';
 }
+
+/**
+ * The three concrete pipelines a report can belong to, combining `classifyReportKind`
+ * and `isEstimationAIReport`: general API suites, the EstimationAI suites hosted via
+ * BrowserStack's API device matrix, and the EstimationAI suites run in a real browser (UI).
+ */
+export type ReportPipeline = 'estimation-api' | 'estimation-ai-api' | 'estimation-ai-ui';
+
+export function classifyReportPipeline(
+  report: import('../types').ParsedReport,
+): ReportPipeline {
+  if (classifyReportKind(report) === 'ui') return 'estimation-ai-ui';
+  return isEstimationAIReport(report) ? 'estimation-ai-api' : 'estimation-api';
+}
+
+export function reportPipelineLabel(pipeline: ReportPipeline): string {
+  switch (pipeline) {
+    case 'estimation-api':
+      return 'Estimation API Tests';
+    case 'estimation-ai-api':
+      return 'Estimation AI-API Tests';
+    case 'estimation-ai-ui':
+      return 'Estimation AI-UI Tests';
+  }
+}

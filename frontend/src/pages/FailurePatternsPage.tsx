@@ -27,13 +27,13 @@ import {
 } from 'recharts';
 import { reportsApi } from '../api/client';
 import type { ParsedReport } from '../types';
-import { flattenTests, formatDate, classifyReportKind } from '../utils/helpers';
+import { flattenTests, formatDate, classifyReportPipeline, reportPipelineLabel } from '../utils/helpers';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
-import { ReportKindSelect, reportKindLabel, type ReportKind } from '../components/ui/ReportKindSelect';
+import { ReportPipelineSelect, availablePipelines, type PipelineFilter } from '../components/ui/ReportPipelineSelect';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { exportRegressionsCSV, exportRegressionsSummaryCSV } from '../utils/csvExport';
 import { exportFailureAnalysisPDF } from '../utils/pdfExport';
@@ -783,7 +783,7 @@ export function FailurePatternsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [reportKind, setReportKind] = useState<ReportKind>('all');
+  const [reportPipeline, setReportPipeline] = useState<PipelineFilter>('all');
   const [showAlwaysFailing, setShowAlwaysFailing] = useState(false);
   const [showFlaky, setShowFlaky] = useState(false);
 
@@ -800,9 +800,21 @@ export function FailurePatternsPage() {
     loadReports();
   }, []);
 
+  // Reset the pipeline filter when it isn't offered in the newly-selected environment
+  // (e.g. switching to PPE while "Estimation API Tests" was selected — PPE only runs
+  // the Estimation AI-UI pipeline).
+  useEffect(() => {
+    if (reportPipeline !== 'all' && !availablePipelines(environment).includes(reportPipeline)) {
+      setReportPipeline('all');
+    }
+  }, [environment, reportPipeline]);
+
   const reports = useMemo(
-    () => allReports.filter((r) => (reportKind === 'all' || classifyReportKind(r) === reportKind) && r.environment === environment),
-    [allReports, reportKind, environment],
+    () =>
+      allReports.filter(
+        (r) => (reportPipeline === 'all' || classifyReportPipeline(r) === reportPipeline) && r.environment === environment,
+      ),
+    [allReports, reportPipeline, environment],
   );
 
   const data = useMemo(
@@ -868,12 +880,12 @@ export function FailurePatternsPage() {
             <h1 className="text-2xl font-bold text-slate-900">Analysis</h1>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            <ReportKindSelect value={reportKind} onChange={setReportKind} />
+            <ReportPipelineSelect value={reportPipeline} onChange={setReportPipeline} environment={environment} />
           </div>
         </div>
         <div className="text-center py-16 text-slate-500">
           <Bug className="h-8 w-8 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">No {reportKind === 'all' ? '' : `${reportKindLabel(reportKind)} `}test reports uploaded yet.</p>
+          <p className="text-sm">No {reportPipeline === 'all' ? '' : `${reportPipelineLabel(reportPipeline)} `}test reports uploaded yet.</p>
         </div>
       </div>
     );
@@ -909,13 +921,13 @@ export function FailurePatternsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <ReportKindSelect value={reportKind} onChange={setReportKind} />
+          <ReportPipelineSelect value={reportPipeline} onChange={setReportPipeline} environment={environment} />
           <ExportPDFButton
             label="Download PDF"
             onClick={() =>
               exportFailureAnalysisPDF({
                 reportCount: reports.length,
-                reportKindLabel: reportKind === 'all' ? 'All Tests' : reportKindLabel(reportKind),
+                reportKindLabel: reportPipeline === 'all' ? 'All Tests' : reportPipelineLabel(reportPipeline),
                 regressions,
                 regressionPrevDate,
                 regressionLatestDate,
