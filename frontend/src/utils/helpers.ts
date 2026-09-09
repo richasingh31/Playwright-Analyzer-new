@@ -117,20 +117,10 @@ function dominantHostname(suites: import('../types').TestSuite[]): string | unde
   return dominant;
 }
 
-/**
- * Classifies a report as 'ui' or 'api'. Primarily by the dominant suite
- * `hostname` (see classifyHostname above). Reports uploaded before hostname
- * tracking was added fall back to the dominant top-level test folder —
- * "EstimationAI" is a UI-test run, everything else is an API-test run.
- */
-export function classifyReportKind(
-  report: import('../types').ParsedReport,
-): 'ui' | 'api' {
-  const hostKind = classifyHostname(dominantHostname(report.suites));
-  if (hostKind) return hostKind;
-
+/** Top-level test folder with the most tests behind it, e.g. "EstimationAI". */
+function dominantTopFolder(report: import('../types').ParsedReport): string {
   const tests = flattenTests(report.suites);
-  if (tests.length === 0) return 'api';
+  if (tests.length === 0) return '';
 
   const topFolderCounts = new Map<string, number>();
   for (const t of tests) {
@@ -148,5 +138,29 @@ export function classifyReportKind(
     }
   });
 
-  return dominant.toLowerCase() === 'estimationai' ? 'ui' : 'api';
+  return dominant;
+}
+
+/**
+ * Classifies a report as 'ui' or 'api'. Primarily by the dominant suite
+ * `hostname` (see classifyHostname above). Reports uploaded before hostname
+ * tracking was added fall back to the dominant top-level test folder —
+ * "EstimationAI" is a UI-test run, everything else is an API-test run.
+ */
+export function classifyReportKind(
+  report: import('../types').ParsedReport,
+): 'ui' | 'api' {
+  const hostKind = classifyHostname(dominantHostname(report.suites));
+  if (hostKind) return hostKind;
+
+  return dominantTopFolder(report).toLowerCase() === 'estimationai' ? 'ui' : 'api';
+}
+
+/**
+ * True for reports whose tests are dominantly under the "EstimationAI" folder,
+ * regardless of ui/api kind — e.g. the BrowserStack-hosted EstimationAI API
+ * suites (hostname classifies them as 'api', not 'ui').
+ */
+export function isEstimationAIReport(report: import('../types').ParsedReport): boolean {
+  return dominantTopFolder(report).toLowerCase() === 'estimationai';
 }
