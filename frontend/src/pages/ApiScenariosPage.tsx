@@ -23,7 +23,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
-import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
+import { ReportKindSelect, reportKindLabel, type ReportKind } from '../components/ui/ReportKindSelect';
 import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { exportScenariosPDF } from '../utils/pdfExport';
 
@@ -600,7 +600,7 @@ export function ApiScenariosPage() {
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [suiteFilter, setSuiteFilter] = useState<string>('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [reportKind, setReportKind] = useState<ReportKind>('api');
+  const [reportKind, setReportKind] = useState<ReportKind>('all');
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
   const [uploadsPage, setUploadsPage] = useState(0);
   const UPLOADS_PAGE_SIZE = 8;
@@ -619,7 +619,7 @@ export function ApiScenariosPage() {
   }, []);
 
   const reports = useMemo(
-    () => allReports.filter((r) => classifyReportKind(r) === reportKind && r.environment === environment),
+    () => allReports.filter((r) => (reportKind === 'all' || classifyReportKind(r) === reportKind) && r.environment === environment),
     [allReports, reportKind, environment],
   );
 
@@ -799,7 +799,7 @@ export function ApiScenariosPage() {
         </div>
         <div className="text-center py-16 text-slate-500">
           <Grid3X3 className="h-8 w-8 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">No {reportKind === 'ui' ? 'UI' : 'API'} test reports uploaded yet.</p>
+          <p className="text-sm">No {reportKind === 'all' ? '' : `${reportKindLabel(reportKind)} `}test reports uploaded yet.</p>
         </div>
       </div>
     );
@@ -831,7 +831,7 @@ export function ApiScenariosPage() {
           <ExportPDFButton
             onClick={() =>
               exportScenariosPDF({
-                reportKindLabel: reportKind === 'ui' ? 'UI Tests' : 'API Tests',
+                reportKindLabel: reportKind === 'all' ? 'All Tests' : `${reportKindLabel(reportKind)} Tests`,
                 reportCount: dateFilteredReports.length,
                 totals,
                 groups: filtered.map((g) => ({

@@ -33,7 +33,7 @@ import { Button } from '../components/ui/Button';
 import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
-import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
+import { ReportKindSelect, reportKindLabel, type ReportKind } from '../components/ui/ReportKindSelect';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { exportRegressionsCSV, exportRegressionsSummaryCSV } from '../utils/csvExport';
 import { exportFailureAnalysisPDF } from '../utils/pdfExport';
@@ -783,7 +783,7 @@ export function FailurePatternsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [reportKind, setReportKind] = useState<ReportKind>('api');
+  const [reportKind, setReportKind] = useState<ReportKind>('all');
   const [showAlwaysFailing, setShowAlwaysFailing] = useState(false);
   const [showFlaky, setShowFlaky] = useState(false);
 
@@ -801,7 +801,7 @@ export function FailurePatternsPage() {
   }, []);
 
   const reports = useMemo(
-    () => allReports.filter((r) => classifyReportKind(r) === reportKind && r.environment === environment),
+    () => allReports.filter((r) => (reportKind === 'all' || classifyReportKind(r) === reportKind) && r.environment === environment),
     [allReports, reportKind, environment],
   );
 
@@ -873,7 +873,7 @@ export function FailurePatternsPage() {
         </div>
         <div className="text-center py-16 text-slate-500">
           <Bug className="h-8 w-8 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">No {reportKind === 'ui' ? 'UI' : 'API'} test reports uploaded yet.</p>
+          <p className="text-sm">No {reportKind === 'all' ? '' : `${reportKindLabel(reportKind)} `}test reports uploaded yet.</p>
         </div>
       </div>
     );
@@ -915,7 +915,7 @@ export function FailurePatternsPage() {
             onClick={() =>
               exportFailureAnalysisPDF({
                 reportCount: reports.length,
-                reportKindLabel: reportKind === 'ui' ? 'UI' : 'API',
+                reportKindLabel: reportKind === 'all' ? 'All Tests' : reportKindLabel(reportKind),
                 regressions,
                 regressionPrevDate,
                 regressionLatestDate,

@@ -544,7 +544,7 @@ function drawTrendCard(
 
 // ── Export Trends PDF ─────────────────────────────────────────────────────────
 
-export async function exportTrendsPDF(reports: ReportSummary[], kindLabel: 'API' | 'UI' = 'API'): Promise<void> {
+export async function exportTrendsPDF(reports: ReportSummary[], kindLabel: string = 'API'): Promise<void> {
   const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' }) as unknown as JsPDFType;
 

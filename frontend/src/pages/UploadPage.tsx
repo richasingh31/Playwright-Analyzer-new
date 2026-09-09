@@ -16,7 +16,7 @@ import { reportsApi, ApiError } from '../api/client';
 import type { ReportSummary, Environment } from '../types';
 import { Button } from '../components/ui/Button';
 import { timeAgo, formatDate, classifyReportKind } from '../utils/helpers';
-import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
+import { ReportKindSelect, reportKindLabel, type ReportKind } from '../components/ui/ReportKindSelect';
 import { useEnvironment, ENVIRONMENTS } from '../context/EnvironmentContext';
 
 const STEPS = [
@@ -65,7 +65,7 @@ export function UploadPage() {
 
   const [recent, setRecent] = useState<ReportSummary[] | null>(null);
   const [recentKinds, setRecentKinds] = useState<Map<string, ReportKind>>(new Map());
-  const [reportKind, setReportKind] = useState<ReportKind>('api');
+  const [reportKind, setReportKind] = useState<ReportKind>('all');
 
   useEffect(() => {
     reportsApi
@@ -87,7 +87,7 @@ export function UploadPage() {
   }, []);
 
   const filteredRecent = (recent ?? []).filter(
-    (r) => (recentKinds.get(r.id) ?? 'api') === reportKind && r.environment === environment,
+    (r) => (reportKind === 'all' || (recentKinds.get(r.id) ?? 'api') === reportKind) && r.environment === environment,
   );
 
   const accept = (f: File) => {
@@ -378,7 +378,7 @@ export function UploadPage() {
                 <p className="text-sm font-medium text-slate-600">
                   {recent.length === 0
                     ? 'No reports yet'
-                    : `No ${reportKind === 'ui' ? 'UI' : 'API'} test reports in ${environment}`}
+                    : `No ${reportKind === 'all' ? '' : `${reportKindLabel(reportKind)} `}test reports in ${environment}`}
                 </p>
                 <p className="mt-1 text-xs text-slate-400 max-w-[16rem]">
                   {recent.length === 0

@@ -1,7 +1,12 @@
 import { Filter } from 'lucide-react';
 import { clsx } from 'clsx';
 
-export type ReportKind = 'api' | 'ui';
+export type ReportKind = 'all' | 'api' | 'ui';
+
+/** Short display label for a report kind — 'All' | 'API' | 'UI'. */
+export function reportKindLabel(kind: ReportKind): string {
+  return kind === 'ui' ? 'UI' : kind === 'api' ? 'API' : 'All';
+}
 
 export function ReportKindSelect({
   value,
@@ -32,8 +37,9 @@ export function ReportKindSelect({
           compact ? 'px-2.5 py-1.5 text-xs' : 'px-4 py-2.5 text-sm',
         )}
       >
-        <option value="api">{compact ? 'API Tests' : 'API Tests (Estimation)'}</option>
-        <option value="ui">{compact ? 'UI Tests' : 'UI Tests (EstimationAI)'}</option>
+        <option value="all">All Tests</option>
+        <option value="api">API Tests</option>
+        <option value="ui">UI Tests</option>
       </select>
     </div>
   );

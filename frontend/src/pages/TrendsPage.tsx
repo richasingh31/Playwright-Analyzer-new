@@ -34,7 +34,7 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { FullPageSpinner, ErrorState } from '../components/ui/Spinner';
 import { UploadReportModal } from '../components/upload/UploadReportModal';
-import { ReportKindSelect, type ReportKind } from '../components/ui/ReportKindSelect';
+import { ReportKindSelect, reportKindLabel, type ReportKind } from '../components/ui/ReportKindSelect';
 import { ExportPDFButton } from '../components/ui/ExportPDFButton';
 import { exportTrendsPDF } from '../utils/pdfExport';
 import { useEnvironment } from '../context/EnvironmentContext';
@@ -375,7 +375,7 @@ export function TrendsPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [reportKind, setReportKind] = useState<ReportKind>('api');
+  const [reportKind, setReportKind] = useState<ReportKind>('all');
   const [reportsPage, setReportsPage] = useState(0);
   const REPORTS_PAGE_SIZE = 8;
 
@@ -446,7 +446,7 @@ export function TrendsPage() {
   // Everything below the Latest Run row (date range, avg rates, charts, heatmap,
   // top failures, all-reports table) reflects whichever kind is selected here.
   const viewFullReports = useMemo(
-    () => envFullReports.filter((r) => classifyReportKind(r) === reportKind),
+    () => envFullReports.filter((r) => reportKind === 'all' || classifyReportKind(r) === reportKind),
     [envFullReports, reportKind],
   );
   const viewReports = useMemo(() => {
@@ -536,6 +536,7 @@ export function TrendsPage() {
   const maxDateVal = viewReports.length ? toDateInputValue(reportTime(viewReports[0])) : '';
 
   const rangeLabel = formatRangeLabel(dateFrom, dateTo);
+  const kindPhrase = reportKind === 'all' ? 'All Tests' : reportKindLabel(reportKind);
 
   if (reports.length === 0) {
     return (
@@ -577,7 +578,7 @@ export function TrendsPage() {
           <h1 className="text-2xl font-extrabold uppercase tracking-wide text-slate-900">Trends</h1>
         </div>
         {filteredReports.length > 0 && (
-          <ExportPDFButton onClick={() => exportTrendsPDF(filteredReports, reportKind === 'ui' ? 'UI' : 'API')} />
+          <ExportPDFButton onClick={() => exportTrendsPDF(filteredReports, kindPhrase)} />
         )}
       </div>
 
@@ -604,7 +605,7 @@ export function TrendsPage() {
         <div className="h-px flex-1 bg-slate-200" />
         <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
           <CalendarRange className="h-3.5 w-3.5 text-indigo-500" />
-          {reportKind === 'ui' ? 'UI Tests' : 'API Tests'} — Analysis for {rangeLabel}
+          {reportKindLabel(reportKind)} Tests — Analysis for {rangeLabel}
         </span>
         <div className="h-px flex-1 bg-slate-200" />
       </div>
@@ -613,7 +614,7 @@ export function TrendsPage() {
         <div className="text-center py-16 text-slate-500">
           <CalendarRange className="h-8 w-8 mx-auto mb-3 opacity-40" />
           <p className="text-sm">
-            No {reportKind === 'ui' ? 'UI test' : 'API test'} reports in the selected date range.
+            No {reportKind === 'all' ? '' : `${reportKindLabel(reportKind)} `}test reports in the selected date range.
           </p>
         </div>
       ) : (
@@ -652,14 +653,14 @@ export function TrendsPage() {
           <DurationTrendChart reports={filteredReports} />
           <Card>
             <CardHeader
-              title={`${reportKind === 'ui' ? 'UI' : 'API'} Automation — Pass Trend`}
+              title={`${kindPhrase} Automation — Pass Trend`}
               subtitle="Pass rate (%), last 8 runs"
             />
             <PassRateLineTrendChart reports={filteredReports} days={8} metric="pass" />
           </Card>
           <Card>
             <CardHeader
-              title={`${reportKind === 'ui' ? 'UI' : 'API'} Automation — Fail Trend`}
+              title={`${kindPhrase} Automation — Fail Trend`}
               subtitle="Fail rate (%), last 8 runs"
             />
             <PassRateLineTrendChart reports={filteredReports} days={8} metric="fail" />
